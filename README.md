@@ -1,5 +1,7 @@
 # Metabase Manager
 
+Metabase Manager is a tool that helps you synchronize your Metabase instances. You can copy question cards from source instances to destination instances with ease.
+
 ![image](https://github.com/coronasafe/metabase_manager/assets/3626859/828941b6-967b-4187-be0e-f20be4d48291)
 
 ![License](https://img.shields.io/github/license/coronasafe/metabase_manager)
@@ -8,7 +10,6 @@
 ![GitHub forks](https://img.shields.io/github/forks/coronasafe/metabase_manager)
 ![GitHub stars](https://img.shields.io/github/stars/coronasafe/metabase_manager)
 
-Metabase Manager is a tool that helps you synchronize your Metabase instances. You can copy question cards from source instances to destination instances with ease.
 
 ## Table of Contents
 
