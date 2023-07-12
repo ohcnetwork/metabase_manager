@@ -1,5 +1,8 @@
 import { Question } from "../types";
 
+import { config } from "telefunc";
+config.disableNamingConvention = true;
+
 async function getCardCreateBody(
   host: string,
   session_token: string,
@@ -16,7 +19,9 @@ async function getCardCreateBody(
       card_data.dataset_query.query,
       card_data.dataset_query.type
     );
-    card_data.dataset_query.query = nativeDataset.query;
+    card_data.dataset_query.native = {
+      query: nativeDataset.query,
+    };
   }
   return {
     visualization_settings: card_data.visualization_settings,
@@ -29,7 +34,7 @@ async function getCardCreateBody(
     cache_ttl: card_data.cache_ttl,
     dataset_query: {
       type: "native",
-      native: { query: card_data.dataset_query.query, "template-tags": {} },
+      native: { query: card_data.dataset_query.native.query, "template-tags": {} },
       database: database_id ? parseInt(database_id) : null,
     },
     parameter_mappings: card_data.parameter_mappings,
