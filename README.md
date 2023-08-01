@@ -54,6 +54,12 @@ cd metabase_manager
 npm install
 ```
 
+4. Generate the Prisma client:
+    
+    ```bash
+    npx prisma generate
+    ```
+
 ## Usage
 
 1. Start the development server:
