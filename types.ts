@@ -68,6 +68,7 @@ export type Server = {
   collection?: string;
   questions?: Card[] | Dashboard[];
   schema?: DatabaseMeta;
+  collectionTree?: any;
 };
 
 export type Database = {
@@ -87,6 +88,7 @@ export type SyncStatus = {
   mapped_ques?: Card;
   checked: boolean;
   entity_type: "card" | "dashboard";
+  collection_path: string[];
 };
 
 export type DatabaseMeta = {

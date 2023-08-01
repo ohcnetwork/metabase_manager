@@ -15,6 +15,23 @@ async function getDashboardCreateBody(dashboard_data: Dashboard, collection_id?:
   };
 }
 
+async function onDashboardList(host: string, session_token: string): Promise<Dashboard[]> {
+  const res = await fetch(`${host}/api/dashboard`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Metabase-Session": session_token,
+    },
+  });
+  const json = await res.json();
+  if (json["cause"])
+    throw Abort({
+      errorMessage: json["cause"],
+    });
+
+  return json;
+}
+
 async function getOrderedCards(
   source_ordered_cards: OrderedCard[],
   dest_collection_id: string | undefined,
@@ -234,4 +251,4 @@ async function onDashboardCreate(
   return card_res_json;
 }
 
-export { onDashboardCreate, getOrderedCards };
+export { onDashboardCreate, onDashboardList, getOrderedCards };

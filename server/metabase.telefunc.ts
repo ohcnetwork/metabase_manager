@@ -23,12 +23,38 @@ async function onCollectionItemsList(
 }
 
 async function onCollectionsList(host: string, session_token: string) {
+  const res = await fetch(
+    `${host}/api/collection/tree?tree=true&exclude-other-user-collections=true&exclude-archived=true`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Metabase-Session": session_token,
+      },
+    }
+  );
+  const json = await res.json();
+  if (json["cause"])
+    throw Abort({
+      errorMessage: json["cause"],
+    });
+  return json;
+}
+
+async function onCreateCollection(host: string, session_token: string, collection_name: string, parent_id: string) {
   const res = await fetch(`${host}/api/collection`, {
-    method: "GET",
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Metabase-Session": session_token,
     },
+    body: JSON.stringify({
+      parent_id,
+      authority_level: null,
+      description: null,
+      color: "#509EE3",
+      name: collection_name,
+    }),
   });
   const json = await res.json();
   if (json["cause"])
@@ -114,4 +140,12 @@ async function onDBSchemaFetch(host: string, session_token: string, database: st
   return json;
 }
 
-export { onDatabaseList, onCollectionsList, onDatasetQueryConvert, onCollectionItemsList, onLogin, onDBSchemaFetch };
+export {
+  onDatabaseList,
+  onCollectionsList,
+  onCreateCollection,
+  onDatasetQueryConvert,
+  onCollectionItemsList,
+  onLogin,
+  onDBSchemaFetch,
+};

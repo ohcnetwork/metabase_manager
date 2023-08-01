@@ -5,8 +5,8 @@ import { Card, Dashboard, DatabaseMeta, Field, Server, SyncStatus, SyncStatusTex
 import { formatHostUrl } from "../../utils";
 import { onGetMapping } from "../../server/database.telefunc";
 import { onCardCreate, onCardList } from "../../server/metabase.card.telefunc";
-import { onCollectionItemsList } from "../../server/metabase.telefunc";
-import { onDashboardCreate } from "../../server/metbase.dashboard.telefunc";
+import { onCollectionItemsList, onCollectionsList, onCreateCollection } from "../../server/metabase.telefunc";
+import { onDashboardCreate, onDashboardList } from "../../server/metbase.dashboard.telefunc";
 
 export { Page };
 
@@ -287,6 +287,109 @@ function Page() {
       return query;
     }
   }
+  function findPath(jsonObj: any, id?: string, startId: string | null = null, path: string[] = [], start = false): any {
+    if (Array.isArray(jsonObj)) {
+      for (const item of jsonObj) {
+        const result = findPath(item, id, startId, path, start);
+        if (result) return result;
+      }
+    } else if (typeof jsonObj === "object") {
+      if (jsonObj["id"] == id && start) {
+        path.push(jsonObj["name"]);
+        return path;
+      } else if (jsonObj["id"] == startId || start) {
+        const children = jsonObj["children"];
+        if (children) {
+          if (start || jsonObj["id"] == startId) {
+            path.push(jsonObj["name"]);
+            start = true;
+            if (jsonObj["id"] == id) return path;
+          }
+          for (const child of children) {
+            const result = findPath(child, id, startId, path, start);
+            if (result) return result;
+          }
+          if (start) path.pop();
+        }
+      }
+    }
+    return null;
+  }
+
+  function collectionExists(jsonObj: any, name: string, startName?: string, start = false): any {
+    if (Array.isArray(jsonObj)) {
+      for (const item of jsonObj) {
+        const result = collectionExists(item, name, startName, start);
+        if (result) return result;
+      }
+    } else if (typeof jsonObj === "object") {
+      if (jsonObj["name"] == name && start) {
+        return true;
+      } else if (jsonObj["name"] == startName || start) {
+        const children = jsonObj["children"];
+        if (children) {
+          if (start || jsonObj["name"] == startName) {
+            start = true;
+          }
+          for (const child of children) {
+            const result = collectionExists(child, name, startName, start);
+            if (result) return result;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  function findCollectionId(jsonObj: any, name: string): any {
+    if (Array.isArray(jsonObj)) {
+      for (const item of jsonObj) {
+        const result = findCollectionId(item, name);
+        if (result) return result;
+      }
+    } else if (typeof jsonObj === "object") {
+      if (jsonObj["name"] === name) {
+        return jsonObj["id"];
+      } else {
+        const children = jsonObj["children"];
+        if (children) {
+          for (const child of children) {
+            const result = findCollectionId(child, name);
+            if (result) return result;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  async function mirrorCollectionTree(
+    source_server: Server,
+    destination_server: Server,
+    source_root_id: string | undefined,
+    destination_root_id: string | undefined,
+    source_card_collection_id: string | undefined
+  ) {
+    const sourcePath = findPath(source_server.collectionTree, source_card_collection_id, source_root_id);
+    const destPath = findPath(destination_server.collectionTree, destination_root_id, destination_root_id);
+    let lastId = -1;
+    for (let i = 1; i < sourcePath.length; i++) {
+      const collectionName = sourcePath[i];
+      const destCollectionID = findCollectionId(destination_server.collectionTree, collectionName);
+      if (destCollectionID == null) {
+        const parentID = lastId == -1 ? findCollectionId(destination_server.collectionTree, destPath[i - 1]) : lastId;
+        const newCollectionTree = await onCreateCollection(
+          destination_server.host,
+          destination_server.session_token,
+          collectionName,
+          parentID
+        );
+        lastId = newCollectionTree.id;
+        destPath.push(collectionName);
+      } else lastId = destCollectionID;
+    }
+    return lastId;
+  }
 
   async function syncQuestion(
     sourceServer: Server,
@@ -310,6 +413,21 @@ function Page() {
         );
       }
 
+      const destCollectionID = await toast.promise(
+        mirrorCollectionTree(
+          sourceServer,
+          destinationServer,
+          sourceServer.collection,
+          destinationServer.collection,
+          question.collection_id?.toString()
+        ),
+        {
+          loading: "Syncing collection tree...",
+          success: "Collection tree synced!",
+          error: "Failed to sync collection tree",
+        }
+      );
+
       const res = await toast.promise(
         onCardCreate(
           sourceServer.host,
@@ -318,7 +436,7 @@ function Page() {
           destinationServer.session_token,
           destinationServer.database,
           { ...question, dataset_query: question_query },
-          destinationServer.collection,
+          destCollectionID?.toString(),
           mappedQuesID
         ),
         {
@@ -357,17 +475,33 @@ function Page() {
     }
   }
 
-  async function getQuestions(host: string, session_token: string, colletion_id?: string) {
+  async function getQuestions(
+    host: string,
+    session_token: string,
+    start_collection_id?: string,
+    collectionTree?: any,
+    collection_ids?: string[]
+  ): Promise<any> {
     const allQuestions = await onCardList(host, session_token);
-    const allDashboards = await onCollectionItemsList(host, session_token, "root", "dashboard");
-    if (colletion_id && colletion_id != "-1") {
-      const collectionQuestions = await onCollectionItemsList(host, session_token, colletion_id, "card");
-      const collectionDashboards = await onCollectionItemsList(host, session_token, colletion_id, "dashboard");
+    const allDashboards = await onDashboardList(host, session_token);
+    if (collection_ids && collection_ids[0] != "-1") {
+      const collectionQuestions = allQuestions.filter((question: Card) =>
+        collection_ids.includes(question?.collection_id?.toString() || "-1")
+      );
+      const collectionDashboards = allDashboards.filter((dashboard: Dashboard) =>
+        collection_ids.includes(dashboard?.collection_id?.toString() || "-1")
+      );
       return [
-        ...collectionDashboards["data"].map((dashboard: Card) => ({ ...dashboard, entity_type: "dashboard" })),
-        ...allQuestions
-          .filter((question: Card) => collectionQuestions["data"].some((card: Card) => card.id === question.id))
-          .map((question: Card) => ({ ...question, entity_type: "question" })),
+        ...collectionDashboards.map((dashboard: Dashboard) => ({
+          ...dashboard,
+          entity_type: "dashboard",
+          collection_path: findPath(collectionTree, dashboard?.collection_id?.toString(), start_collection_id),
+        })),
+        ...collectionQuestions.map((question: Card) => ({
+          ...question,
+          entity_type: "question",
+          collection_path: findPath(collectionTree, question?.collection_id?.toString(), start_collection_id),
+        })),
       ];
     }
     return [...allDashboards, ...allQuestions];
@@ -382,11 +516,43 @@ function Page() {
     return false;
   }
 
+  function findChildren(jsonObj: any, startId?: string, result: string[] = [], started = false) {
+    if (Array.isArray(jsonObj)) {
+      for (const item of jsonObj) {
+        findChildren(item, startId, result);
+      }
+    } else if (typeof jsonObj === "object") {
+      if (jsonObj["id"] == startId || started) {
+        result.push(jsonObj["id"].toString());
+        const children = jsonObj["children"];
+        if (children) {
+          for (const child of children) {
+            findChildren(child, startId, result, true);
+          }
+        }
+      } else {
+        const children = jsonObj["children"];
+        if (children) {
+          for (const child of children) {
+            findChildren(child, startId, result);
+          }
+        }
+      }
+    }
+    return result;
+  }
+
   async function loadSyncData(): Promise<void> {
     const updatedSourceServers = await Promise.all(
       sourceServers.map(async (s) => ({
         ...s,
-        questions: await getQuestions(s.host, s.session_token, s.collection),
+        questions: await getQuestions(
+          s.host,
+          s.session_token,
+          s.collection?.toString(),
+          s.collectionTree,
+          findChildren(s.collectionTree, s.collection?.toString())
+        ),
       }))
     );
     setSourceServers(updatedSourceServers);
@@ -394,7 +560,13 @@ function Page() {
     const updatedDestServers = await Promise.all(
       destinationServers.map(async (s) => ({
         ...s,
-        questions: await getQuestions(s.host, s.session_token, s.collection),
+        questions: await getQuestions(
+          s.host,
+          s.session_token,
+          s.collection?.toString(),
+          s.collectionTree,
+          findChildren(s.collectionTree, s.collection?.toString())
+        ),
       }))
     );
     setDestinationServers(updatedDestServers);
@@ -405,7 +577,7 @@ function Page() {
       for (const question of server.questions) {
         const syncedIDs = (await onGetMapping(question.entity_id || "-1")).map((d) => d.destinationCardID);
         for (const destServer of updatedDestServers) {
-          const mapped_ques = destServer.questions.find((q) => syncedIDs.includes(q.entity_id || "-1"));
+          const mapped_ques = destServer.questions.find((q: any) => syncedIDs.includes(q.entity_id || "-1"));
           syncStatusTemp.push({
             id: `${destServer.host}-${question.name}`,
             source_server: server,
@@ -420,6 +592,7 @@ function Page() {
               : ("ready" as SyncStatusText),
             checked: false,
             entity_type: question.entity_type,
+            collection_path: question.collection_path,
           });
         }
       }
@@ -509,7 +682,7 @@ function Page() {
         </div>
       )}
       {syncStatus.length > 0 && (
-        <div className="mt-5 justify-center flex flex-col mx-auto max-w-4xl text-base leading-7 border rounded-lg border-gray-300 px-8 py-6">
+        <div className="mt-5 justify-center flex flex-col mx-auto max-w-6xl text-base leading-7 border rounded-lg border-gray-300 px-8 py-6">
           <div className="relative w-full bg-gray-200 rounded mb-4">
             <div
               className={`relative top-0 h-4 rounded progress-bar overflow-hidden ${progressBar.color} ${
@@ -547,6 +720,9 @@ function Page() {
                   </th>
                   <th scope="col" className="py-3 px-2">
                     Card
+                  </th>
+                  <th scope="col" className="py-3 px-2">
+                    Path
                   </th>
                   <th scope="col" className="py-3 px-2">
                     Status
@@ -593,18 +769,23 @@ function Page() {
                           </label>
                         </div>
                       </td>
-                      <th scope="row" className="py-4 px-2 font-medium text-gray-900">
+                      <td scope="row" className="py-4 px-2 font-medium text-gray-900">
                         {formatHostUrl(status.source_server.host)}
-                      </th>
-                      <th scope="row" className="py-4 px-2 font-medium text-gray-900">
+                      </td>
+                      <td scope="row" className="py-4 px-2 font-medium text-gray-900">
                         {formatHostUrl(status.destination_server.host)}
-                      </th>
-                      <th scope="row" className="py-4 px-2 font-medium text-gray-900">
+                      </td>
+                      <td scope="row" className="py-4 px-2 font-medium text-gray-900">
                         {status.question.name} <p className="text-xs text-gray-500">({status.entity_type})</p>
-                      </th>
+                      </td>
+                      <td scope="row" className="py-2 px-2 text-gray-800 text-[12px]">
+                        {status.collection_path?.join("/")}
+                      </td>
                       <td
                         scope="row"
-                        className={`px-2 py-4 font-medium capitalize ${getSyncStatusTextColor(status.status)}`}
+                        className={`px-2 py-4 font-medium capitalize ${getSyncStatusTextColor(
+                          status.status
+                        )} whitespace-nowrap`}
                       >
                         {status.status}
                       </td>
