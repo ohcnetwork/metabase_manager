@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import { ServerInput } from "../../components/ServerInput";
 import { Toaster, toast } from "react-hot-toast";
-import { Question, Server, SyncStatus, SyncStatusText } from "../../types";
-import { onCardCreate, onCardList, onCollectionItemsList } from "../../server/metabase.telefunc";
+import { Card, Dashboard, DatabaseMeta, Field, Server, SyncStatus, SyncStatusText, Table } from "../../types";
 import { formatHostUrl } from "../../utils";
+import { onGetMapping } from "../../server/database.telefunc";
+import { onCardCreate, onCardList } from "../../server/metabase.card.telefunc";
+import { onCollectionItemsList } from "../../server/metabase.telefunc";
+import { onDashboardCreate } from "../../server/metbase.dashboard.telefunc";
 
 export { Page };
 
@@ -26,9 +29,287 @@ function Page() {
     }));
   }, [syncStatus]);
 
-  async function syncQuestion(sourceServer: Server, destinationServer: Server, question: Question, syncID: string) {
+  async function syncDashboard(
+    sourceServer: Server,
+    destinationServer: Server,
+    dashboard: Dashboard,
+    syncID: string,
+    mappedDashID?: number
+  ) {
     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
     try {
+      const res = await toast.promise(
+        onDashboardCreate(
+          sourceServer.host,
+          destinationServer.host,
+          sourceServer.session_token,
+          destinationServer.session_token,
+          destinationServer.database,
+          dashboard,
+          destinationServer.collection,
+          mappedDashID
+        ),
+        {
+          loading: "Syncing dashboard...",
+          success: "Dashboard synced!",
+          error: "Failed to sync dashboard",
+        }
+      );
+      if (res["error"]) {
+        throw new Error(res["error"]);
+      }
+      setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
+    } catch (e: any) {
+      await toast.error(e.message);
+      console.error(e);
+      setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
+    }
+  }
+
+  async function getDestMapping(
+    source_id: string,
+    source_schema: DatabaseMeta,
+    destination_schema: DatabaseMeta,
+    type: "table" | "field" = "table",
+    source_table_id?: string
+  ) {
+    if (type === "table") {
+      const sourceTable = source_schema?.tables?.find((table) => table?.id == parseInt(source_id));
+      if (!sourceTable) {
+        await toast.error("Table " + source_id + " not found in source schema");
+        return;
+      }
+      const destinationTable = destination_schema?.tables?.find((table) => table.name == sourceTable?.name);
+      if (!destinationTable) {
+        await toast.error("Table " + sourceTable?.name + " not found in destination schema");
+        return;
+      }
+      return destinationTable?.id;
+    } else {
+      let sourceField: Field | undefined;
+      let sourceTable: Table | undefined;
+      if (source_table_id) {
+        sourceTable = source_schema?.tables?.find((table) => table?.id == parseInt(source_table_id));
+        sourceField = sourceTable?.fields?.find((field) => field?.id === parseInt(source_id));
+      } else {
+        sourceField = source_schema?.tables
+          ?.flatMap((table) => table?.fields)
+          .find((field) => field?.id === parseInt(source_id));
+        sourceTable = source_schema?.tables?.find((table) => table?.id === sourceField?.table_id);
+      }
+      if (!sourceField) {
+        await toast.error("Field " + source_id + " not found in source schema");
+        return;
+      }
+      const destTable = destination_schema?.tables?.find((table) => table.name == sourceTable?.name);
+      const destinationField = destTable?.fields?.find((field) => field?.name === sourceField?.name);
+      if (!destinationField) {
+        await toast.error("Field " + sourceField?.name + " not found in destination schema");
+        return;
+      }
+      return destinationField?.id;
+    }
+  }
+
+  async function mapJoins(
+    joins: any,
+    source_schema: DatabaseMeta,
+    destination_schema: DatabaseMeta,
+    original_query: any
+  ) {
+    const mapped_joins = [];
+    const original_table_id = original_query["source-table"];
+    for (const join of joins) {
+      const secondary_table: string = join["source-table"];
+
+      const mapped_secondary_table = await getDestMapping(
+        secondary_table,
+        source_schema,
+        destination_schema,
+        "table",
+        original_table_id
+      );
+      if (typeof join.condition[1][1] == "object") {
+        mapped_joins.push({
+          ...join,
+          "source-table": mapped_secondary_table,
+          condition: [
+            join.condition[0],
+
+            [
+              join.condition[1][0],
+              [
+                join.condition[1][1][0],
+                await getDestMapping(
+                  join.condition[1][1][1],
+                  source_schema,
+                  destination_schema,
+                  "field",
+                  original_table_id
+                ),
+                join.condition[1][1][2],
+              ],
+              [
+                join.condition[1][2][0],
+                await getDestMapping(
+                  join.condition[1][2][1],
+                  source_schema,
+                  destination_schema,
+                  "field",
+                  secondary_table
+                ),
+                join.condition[1][2][2],
+              ],
+            ],
+
+            [
+              join.condition[2][0],
+              [
+                join.condition[2][1][0],
+                await getDestMapping(
+                  join.condition[2][1][1],
+                  source_schema,
+                  destination_schema,
+                  "field",
+                  original_table_id
+                ),
+                join.condition[2][1][2],
+              ],
+              [
+                join.condition[2][2][0],
+                await getDestMapping(
+                  join.condition[2][2][1],
+                  source_schema,
+                  destination_schema,
+                  "field",
+                  secondary_table
+                ),
+                join.condition[2][2][2],
+              ],
+            ],
+          ],
+        });
+      } else {
+        mapped_joins.push({
+          ...join,
+          "source-table": mapped_secondary_table,
+          condition: [
+            join.condition[0],
+
+            [
+              join.condition[1][0],
+              await getDestMapping(join.condition[1][1], source_schema, destination_schema, "field", original_table_id),
+              join.condition[1][2],
+            ],
+
+            [
+              join.condition[2][0],
+              await getDestMapping(join.condition[2][1], source_schema, destination_schema, "field", secondary_table),
+              join.condition[2][2],
+            ],
+          ],
+        });
+      }
+    }
+    return mapped_joins;
+  }
+
+  async function transformQuery(
+    query: any,
+    source_schema?: DatabaseMeta,
+    destination_schema?: DatabaseMeta,
+    source_table?: string,
+    original_query?: any
+  ): any {
+    if (!source_schema || !destination_schema) return query;
+    if (Array.isArray(query)) {
+      return await Promise.all(
+        query.map(async (item, _) => {
+          if (Array.isArray(item) && item[0] === "field") {
+            const mappedID = await getDestMapping(item[1], source_schema, destination_schema, "field", source_table);
+            const rest_elements = item.slice(2);
+            if (Array.isArray(rest_elements)) {
+              for (let i = 0; i < rest_elements.length; i++) {
+                if (Array.isArray(rest_elements[i])) {
+                  rest_elements[i] = await transformQuery(
+                    rest_elements[i],
+                    source_schema,
+                    destination_schema,
+                    source_table,
+                    original_query
+                  );
+                } else if (typeof rest_elements[i] === "object" && rest_elements[i] !== null) {
+                  rest_elements[i] = await transformQuery(
+                    rest_elements[i],
+                    source_schema,
+                    destination_schema,
+                    source_table,
+                    original_query
+                  );
+                }
+              }
+            }
+            return ["field", mappedID].concat(rest_elements);
+          }
+          return await transformQuery(item, source_schema, destination_schema, source_table, original_query);
+        })
+      );
+    } else if (typeof query === "object" && query !== null) {
+      const newQuery: {
+        [key: string]: any;
+      } = {};
+      for (const key in query) {
+        if (key === "joins") {
+          newQuery["joins"] = await mapJoins(query[key], source_schema, destination_schema, original_query);
+        } else if (key === "source-table") {
+          const mappedID = await getDestMapping(query[key], source_schema, destination_schema, "table", query[key]);
+          newQuery["source-table"] = mappedID;
+        } else if (key === "source-field") {
+          newQuery["source-field"] = await getDestMapping(
+            query[key],
+            source_schema,
+            destination_schema,
+            "field",
+            source_table
+          );
+        } else {
+          newQuery[key] = await transformQuery(
+            query[key],
+            source_schema,
+            destination_schema,
+            source_table,
+            original_query
+          );
+        }
+      }
+      return newQuery;
+    } else {
+      return query;
+    }
+  }
+
+  async function syncQuestion(
+    sourceServer: Server,
+    destinationServer: Server,
+    question: Card,
+    syncID: string,
+    mappedQuesID?: number
+  ) {
+    setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
+    try {
+      question.dataset_query.database = destinationServer.database;
+
+      const question_query = { ...question.dataset_query };
+      if (question_query.type != "native") {
+        question_query.query = await transformQuery(
+          question_query.query,
+          sourceServer.schema,
+          destinationServer.schema,
+          undefined,
+          question.dataset_query.query
+        );
+      }
+
       const res = await toast.promise(
         onCardCreate(
           sourceServer.host,
@@ -36,12 +317,13 @@ function Page() {
           sourceServer.session_token,
           destinationServer.session_token,
           destinationServer.database,
-          question,
-          destinationServer.collection
+          { ...question, dataset_query: question_query },
+          destinationServer.collection,
+          mappedQuesID
         ),
         {
           loading: "Syncing question...",
-          success: "Question synced!",
+          success: "Card synced!",
           error: "Failed to sync question",
         }
       );
@@ -49,7 +331,8 @@ function Page() {
         throw new Error(res["error"]);
       }
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
-    } catch (e) {
+    } catch (e: any) {
+      await toast.error(e.message);
       console.error(e);
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
     }
@@ -57,8 +340,10 @@ function Page() {
 
   function getSyncStatusTextColor(status: SyncStatusText): string | undefined {
     switch (status) {
-      case "present":
+      case "in-sync":
         return "text-blue-500";
+      case "outdated":
+        return "text-orange-500";
       case "ready":
         return "text-gray-500";
       case "syncing":
@@ -74,18 +359,35 @@ function Page() {
 
   async function getQuestions(host: string, session_token: string, colletion_id?: string) {
     const allQuestions = await onCardList(host, session_token);
+    const allDashboards = await onCollectionItemsList(host, session_token, "root", "dashboard");
     if (colletion_id && colletion_id != "-1") {
       const collectionQuestions = await onCollectionItemsList(host, session_token, colletion_id, "card");
-      return allQuestions.filter((question: Question) =>
-        collectionQuestions["data"].some((card: Question) => card.id === question.id)
-      );
+      const collectionDashboards = await onCollectionItemsList(host, session_token, colletion_id, "dashboard");
+      return [
+        ...collectionDashboards["data"].map((dashboard: Card) => ({ ...dashboard, entity_type: "dashboard" })),
+        ...allQuestions
+          .filter((question: Card) => collectionQuestions["data"].some((card: Card) => card.id === question.id))
+          .map((question: Card) => ({ ...question, entity_type: "question" })),
+      ];
     }
-    return allQuestions;
+    return [...allDashboards, ...allQuestions];
+  }
+
+  function checkChangesRequired(source_question: Card, destination_question: Card) {
+    if (source_question.description !== destination_question.description) return true;
+    if (source_question.display !== destination_question.display) return true;
+    // if (source_question?.dataset_query?.native?.query !== destination_question?.dataset_query?.native?.query)
+    //   return true;
+
+    return false;
   }
 
   async function loadSyncData(): Promise<void> {
     const updatedSourceServers = await Promise.all(
-      sourceServers.map(async (s) => ({ ...s, questions: await getQuestions(s.host, s.session_token, s.collection) }))
+      sourceServers.map(async (s) => ({
+        ...s,
+        questions: await getQuestions(s.host, s.session_token, s.collection),
+      }))
     );
     setSourceServers(updatedSourceServers);
 
@@ -97,31 +399,55 @@ function Page() {
     );
     setDestinationServers(updatedDestServers);
 
-    const syncStatus = updatedSourceServers.flatMap((server) =>
-      server.questions.flatMap((question) =>
-        updatedDestServers.map((destServer) => ({
-          id: `${destServer.host}-${question.name}`,
-          source_server: server,
-          destination_server: destServer,
-          question,
-        }))
-      )
-    );
+    const syncStatusTemp = [];
 
-    // Duplicates are detected by the question name for now
-    setSyncStatus(
-      syncStatus.map((s) => {
-        const isUnique = s.destination_server?.questions?.find((q) => q.name === s.question.name) === undefined;
-        return { ...s, ...(isUnique ? { status: "ready", checked: true } : { status: "present", checked: false }) };
-      })
-    );
+    for (const server of updatedSourceServers) {
+      for (const question of server.questions) {
+        const syncedIDs = (await onGetMapping(question.entity_id || "-1")).map((d) => d.destinationCardID);
+        for (const destServer of updatedDestServers) {
+          const mapped_ques = destServer.questions.find((q) => syncedIDs.includes(q.entity_id || "-1"));
+          syncStatusTemp.push({
+            id: `${destServer.host}-${question.name}`,
+            source_server: server,
+            destination_server: destServer,
+            question,
+            syncedIDs,
+            mapped_ques,
+            status: mapped_ques
+              ? checkChangesRequired(question, mapped_ques)
+                ? "outdated"
+                : "in-sync"
+              : ("ready" as SyncStatusText),
+            checked: false,
+            entity_type: question.entity_type,
+          });
+        }
+      }
+    }
+
+    setSyncStatus(syncStatusTemp);
   }
 
   function startSync() {
     setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
     const checkedSyncQues = syncStatus.filter((s) => s.checked);
-    checkedSyncQues.forEach(async (ques) => {
-      syncQuestion(ques.source_server, ques.destination_server, ques.question, ques.id);
+    checkedSyncQues.forEach(async (syncData) => {
+      if (syncData.entity_type === "dashboard")
+        await syncDashboard(
+          syncData.source_server,
+          syncData.destination_server,
+          syncData.question as Dashboard,
+          syncData.id,
+          syncData.mapped_ques?.id
+        );
+      else
+        await syncQuestion(
+          syncData.source_server,
+          syncData.destination_server,
+          syncData.question as Card,
+          syncData.id,
+          syncData.mapped_ques?.id
+        );
     });
   }
 
@@ -220,7 +546,7 @@ function Page() {
                     Destination
                   </th>
                   <th scope="col" className="py-3 px-2">
-                    Question
+                    Card
                   </th>
                   <th scope="col" className="py-3 px-2">
                     Status
@@ -228,52 +554,62 @@ function Page() {
                 </tr>
               </thead>
               <tbody>
-                {syncStatus.map((status, index) => (
-                  <tr
-                    key={index}
-                    className="bg-white border-b hover:bg-gray-50"
-                    onClick={() => {
-                      setSyncStatus((syncStatus) =>
-                        syncStatus.map((s) => (s.id === status.id ? { ...s, checked: !s.checked } : s))
-                      );
-                    }}
-                  >
-                    <td className="w-4 p-4">
-                      <div className="flex items-center">
-                        <input
-                          id={`checkbox-table-${index}`}
-                          type="checkbox"
-                          checked={status.checked}
-                          onChange={(e) => {
-                            const checked = (e.target as HTMLInputElement).checked;
-                            setSyncStatus((syncStatus) =>
-                              syncStatus.map((s) => (s.id === status.id ? { ...s, checked } : s))
-                            );
-                          }}
-                          className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                        />
-                        <label htmlFor={`checkbox-table-${index}`} className="sr-only">
-                          checkbox
-                        </label>
-                      </div>
-                    </td>
-                    <th scope="row" className="py-4 px-2 font-medium text-gray-900">
-                      {formatHostUrl(status.source_server.host)}
-                    </th>
-                    <th scope="row" className="py-4 px-2 font-medium text-gray-900">
-                      {formatHostUrl(status.destination_server.host)}
-                    </th>
-                    <th scope="row" className="py-4 px-2 font-medium text-gray-900">
-                      {status.question.name}
-                    </th>
-                    <td
-                      scope="row"
-                      className={`px-2 py-4 font-medium capitalize ${getSyncStatusTextColor(status.status)}`}
+                {syncStatus
+                  .sort((a, b) => {
+                    if (a.entity_type === "dashboard" && b.entity_type !== "dashboard") {
+                      return -1;
+                    } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
+                      return 1;
+                    } else {
+                      return a.id.localeCompare(b.id);
+                    }
+                  })
+                  .map((status: SyncStatus, index: number) => (
+                    <tr
+                      key={status.id + status.entity_type}
+                      className="bg-white border-b hover:bg-gray-50"
+                      onClick={() => {
+                        setSyncStatus((syncStatus) =>
+                          syncStatus.map((s) => (s.id === status.id ? { ...s, checked: !s.checked } : s))
+                        );
+                      }}
                     >
-                      {status.status}
-                    </td>
-                  </tr>
-                ))}
+                      <td className="w-4 p-4">
+                        <div className="flex items-center">
+                          <input
+                            id={`checkbox-table-${status.id}-${status.entity_type}`}
+                            type="checkbox"
+                            checked={status.checked}
+                            onChange={(e) => {
+                              const checked = (e.target as HTMLInputElement).checked;
+                              setSyncStatus((syncStatus) =>
+                                syncStatus.map((s) => (s.id === status.id ? { ...s, checked } : s))
+                              );
+                            }}
+                            className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <label htmlFor={`checkbox-table-${index}`} className="sr-only">
+                            checkbox
+                          </label>
+                        </div>
+                      </td>
+                      <th scope="row" className="py-4 px-2 font-medium text-gray-900">
+                        {formatHostUrl(status.source_server.host)}
+                      </th>
+                      <th scope="row" className="py-4 px-2 font-medium text-gray-900">
+                        {formatHostUrl(status.destination_server.host)}
+                      </th>
+                      <th scope="row" className="py-4 px-2 font-medium text-gray-900">
+                        {status.question.name} <p className="text-xs text-gray-500">({status.entity_type})</p>
+                      </th>
+                      <td
+                        scope="row"
+                        className={`px-2 py-4 font-medium capitalize ${getSyncStatusTextColor(status.status)}`}
+                      >
+                        {status.status}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>

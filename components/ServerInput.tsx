@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Database, Server } from "../types";
 import toast from "react-hot-toast";
-import { onLogin, onCollectionsList, onDatabaseList } from "../server/metabase.telefunc";
+import { onLogin, onCollectionsList, onDatabaseList, onDBSchemaFetch } from "../server/metabase.telefunc";
 import { formatHostUrl } from "../utils";
 
 export { ServerInput };
@@ -22,6 +22,7 @@ function ServerInput(props: {
     password: "",
     database: "-1",
     collection: "-1",
+    schema: null,
   });
   const [loginMethod, setLoginMethod] = useState<"session" | "password">("password");
 
@@ -79,8 +80,9 @@ function ServerInput(props: {
     if (host.endsWith("/")) host = host.slice(0, -1);
 
     if (form.database != "-1") {
-      props.onAdd({ ...form, host });
-      setServers((servers) => [...servers, { ...form, host }]);
+      const schema = await onDBSchemaFetch(host, form.session_token, form.database);
+      props.onAdd({ ...form, host, schema });
+      setServers((servers) => [...servers, { ...form, host, schema }]);
       resetForm();
       return;
     }
@@ -105,6 +107,7 @@ function ServerInput(props: {
       password: "",
       database: "-1",
       collection: "-1",
+      schema: null,
     });
     setLoginMethod("password");
     setDatabasesList([]);
@@ -117,6 +120,7 @@ function ServerInput(props: {
         <div className="mb-4">
           <label className="block text-gray-700 text-sm font-bold mb-2">Host</label>
           <input
+            data-testid={`host-${props.type}`}
             className="border rounded w-full py-2 px-3 text-gray-700 leading-tight"
             type="text"
             value={form.host}
@@ -132,6 +136,7 @@ function ServerInput(props: {
               {loginMethod === "session" ? "Session Token" : "Credentials"}{" "}
             </label>
             <button
+              data-testid={`toggle-login-method-${props.type}`}
               className="justify-end w-5 h-5 mb-2"
               onClick={() => {
                 setLoginMethod(loginMethod === "session" ? "password" : "session");
@@ -146,6 +151,7 @@ function ServerInput(props: {
             <input
               className="border rounded w-full py-2 px-3 text-gray-700 leading-tight"
               type="password"
+              data-testid={`session_token-${props.type}`}
               value={form.session_token}
               onChange={(e) => {
                 setForm((form) => ({ ...form, session_token: e.target.value }));
@@ -158,6 +164,7 @@ function ServerInput(props: {
               <input
                 className="border rounded w-full py-2 px-3 text-gray-700 leading-tight"
                 type="text"
+                data-testid={`email-${props.type}`}
                 value={form.email}
                 onChange={(e) => {
                   setForm((form) => ({ ...form, email: e.target.value }));
@@ -167,6 +174,7 @@ function ServerInput(props: {
               <input
                 className="border rounded w-full py-2 px-3 text-gray-700 leading-tight"
                 type="password"
+                data-testid={`password-${props.type}`}
                 value={form.password}
                 onChange={(e) => {
                   setForm((form) => ({ ...form, password: e.target.value }));
@@ -180,6 +188,7 @@ function ServerInput(props: {
         <div className={`relative w-full mb-4 ${databasesList.length === 0 ? "hidden" : "block"}`}>
           <label className="block text-gray-700 text-sm font-bold mb-2">Database</label>
           <select
+            data-testid={`database-${props.type}`}
             className="w-full bg-white border border-gray-400 hover:border-gray-500 px-4 py-2 pr-8 rounded shadow leading-tight"
             value={form.database}
             onChange={(e) => {
@@ -200,6 +209,7 @@ function ServerInput(props: {
         <div className={`relative w-full mb-4 ${collectionsList.length === 0 ? "hidden" : "block"}`}>
           <label className="block text-gray-700 text-sm font-bold mb-2">Collections</label>
           <select
+            data-testid={`collection-${props.type}`}
             className="w-full bg-white border border-gray-400 hover:border-gray-500 px-4 py-2 pr-8 rounded shadow leading-tight"
             value={form.collection}
             onChange={(e) => {
@@ -218,6 +228,7 @@ function ServerInput(props: {
         </div>
         <div className="flex flex-col sm:flex-row gap-4">
           <button
+            data-testid={`cancel-${props.type}`}
             type="button"
             onClick={resetForm}
             className="w-full rounded-md bg-gray-300 hover:bg-gray-400  px-3 py-2 text-sm font-bold shadow-sm"
@@ -225,6 +236,7 @@ function ServerInput(props: {
             Cancel
           </button>
           <button
+            data-testid={`add-${props.type}`}
             type="button"
             onClick={addServerClick}
             className="w-full rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad]"
@@ -241,6 +253,7 @@ function ServerInput(props: {
       {servers.map((server) => (
         <div key={server.host} className="flex">
           <button
+            data-testid={`remove-${props.type}`}
             type="button"
             onClick={() => {
               props.onRemove(server);
@@ -270,6 +283,7 @@ function ServerInput(props: {
       ))}
 
       <button
+        data-testid={`add-${props.type}`}
         type="button"
         onClick={() => {
           setInForm(true);
