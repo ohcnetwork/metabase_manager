@@ -38,6 +38,21 @@ function Page() {
   ) {
     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
     try {
+      const destCollectionID = await toast.promise(
+        mirrorCollectionTree(
+          sourceServer,
+          destinationServer,
+          sourceServer.collection,
+          destinationServer.collection,
+          dashboard.collection_id?.toString()
+        ),
+        {
+          loading: "Syncing collection tree...",
+          success: "Collection tree synced!",
+          error: "Failed to sync collection tree",
+        }
+      );
+
       const res = await toast.promise(
         onDashboardCreate(
           sourceServer.host,
@@ -46,7 +61,7 @@ function Page() {
           destinationServer.session_token,
           destinationServer.database,
           dashboard,
-          destinationServer.collection,
+          destCollectionID.toString(),
           mappedDashID
         ),
         {
@@ -372,12 +387,14 @@ function Page() {
   ) {
     const sourcePath = findPath(source_server.collectionTree, source_card_collection_id, source_root_id);
     const destPath = findPath(destination_server.collectionTree, destination_root_id, destination_root_id);
+    const destCollectionTree = await onCollectionsList(destination_server.host, destination_server.session_token);
+
     let lastId = -1;
     for (let i = 1; i < sourcePath.length; i++) {
       const collectionName = sourcePath[i];
-      const destCollectionID = findCollectionId(destination_server.collectionTree, collectionName);
+      const destCollectionID = findCollectionId(destCollectionTree, collectionName);
       if (destCollectionID == null) {
-        const parentID = lastId == -1 ? findCollectionId(destination_server.collectionTree, destPath[i - 1]) : lastId;
+        const parentID = lastId == -1 ? findCollectionId(destCollectionTree, destPath[i - 1]) : lastId;
         const newCollectionTree = await onCreateCollection(
           destination_server.host,
           destination_server.session_token,
@@ -601,10 +618,10 @@ function Page() {
     setSyncStatus(syncStatusTemp);
   }
 
-  function startSync() {
+  async function startSync() {
     setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
     const checkedSyncQues = syncStatus.filter((s) => s.checked);
-    checkedSyncQues.forEach(async (syncData) => {
+    for (const syncData of checkedSyncQues) {
       if (syncData.entity_type === "dashboard")
         await syncDashboard(
           syncData.source_server,
@@ -621,7 +638,7 @@ function Page() {
           syncData.id,
           syncData.mapped_ques?.id
         );
-    });
+    }
   }
 
   return (
@@ -733,9 +750,9 @@ function Page() {
                 {syncStatus
                   .sort((a, b) => {
                     if (a.entity_type === "dashboard" && b.entity_type !== "dashboard") {
-                      return -1;
-                    } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
                       return 1;
+                    } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
+                      return -1;
                     } else {
                       return a.id.localeCompare(b.id);
                     }
