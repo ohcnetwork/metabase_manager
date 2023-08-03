@@ -35,13 +35,19 @@ async function onDashboardList(host: string, session_token: string): Promise<Das
 async function getOrderedCards(
   source_ordered_cards: OrderedCard[],
   dest_collection_id: string | undefined,
+  source_host: string,
   destination_host: string,
   dest_session_token: string,
   dest_dashboard_id: string
 ) {
   const dest_cards = [];
   for (const ordered_card of source_ordered_cards) {
-    const dest_card_id = await onGetMapping(ordered_card?.card?.entity_id || "", destination_host);
+    const dest_card_id = await onGetMapping(
+      ordered_card?.card?.entity_id ?? "",
+      "dashboard",
+      source_host,
+      destination_host
+    );
     const dest_card_data = await getCardDetailsByEntityID(
       destination_host,
       dest_session_token,
@@ -125,6 +131,60 @@ async function onDashboardCreate(
   if (dashboard_id !== undefined) {
     method = "PUT";
     url = `${dest_host}/api/dashboard/${dest_dashboard_id}`;
+
+    const existingDashboardData = await getDashboardDetailsByID(dest_host, dest_session_token, dest_dashboard_id ?? -1);
+
+    for (const ordered_card of existingDashboardData.ordered_cards ?? []) {
+      if (!ordered_card?.card?.entity_id) continue; //Exclude text, link and other non question cards
+
+      const card_res = await fetch(
+        `${dest_host}/api/dashboard/${dest_dashboard_id}/cards?dashcardId=${ordered_card.id}`,
+        {
+          method: "DELETE",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Metabase-Session": dest_session_token,
+          },
+        }
+      );
+
+      if (card_res.status != 204)
+        throw Abort({
+          errorMessage: `Error while deleting card "${ordered_card.card.name}" from dashboard "${dest_dashboard_id}"`,
+        });
+    }
+
+    // const dashboard_card_res = await fetch(`${dest_host}/api/dashboard/${dest_dashboard_id}/cards`, {
+    //   method: "PUT",
+    //   headers: {
+    //     "Content-Type": "application/json",
+    //     "X-Metabase-Session": dest_session_token,
+    //   },
+    //   body: JSON.stringify({
+    //     cards: [],
+    //   }),
+    // });
+    // const card_res_json = await dashboard_card_res.json();
+
+    // if (card_res_json["cause"])
+    //   throw Abort({
+    //     errorMessage: card_res_json["cause"],
+    //   });
+
+    const res = await fetch(`${dest_host}/api/dashboard/${dest_dashboard_id}`, {
+      method: "PUT",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Metabase-Session": dest_session_token,
+      },
+      body: JSON.stringify({ ...existingDashboardData, ordered_cards: [] }),
+    });
+
+    const json = await res.json();
+    if (json["cause"])
+      throw Abort({
+        errorMessage: json["cause"],
+      });
   } else {
     method = "POST";
     url = `${dest_host}/api/dashboard`;
@@ -146,7 +206,7 @@ async function onDashboardCreate(
         errorMessage: json["cause"],
       });
 
-    const existingMapping = await onGetMapping(dashboard_data?.id?.toString(), dest_host);
+    const existingMapping = await onGetMapping(dashboard_data?.id?.toString(), "dashboard", source_host, dest_host);
 
     if (existingMapping?.length > 0) {
       await onUpdateMapping(dashboard_data?.id?.toString(), json["id"].toString(), dest_host);
@@ -181,8 +241,10 @@ async function onDashboardCreate(
 
   const dashboard_cards = [];
 
-  for (const ordered_card of fullDashboardData.ordered_cards || []) {
-    const destCardSyncedId = await onGetMapping(ordered_card?.card?.entity_id || "", dest_host, "card");
+  for (const ordered_card of fullDashboardData.ordered_cards ?? []) {
+    if (!ordered_card?.card?.entity_id) continue; //Exclude text, link and other non question cards
+
+    const destCardSyncedId = await onGetMapping(ordered_card?.card?.entity_id ?? "", "card", source_host, dest_host);
 
     if (destCardSyncedId?.length === 0)
       throw Abort({

@@ -2,9 +2,10 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-async function onGetMapping(source_entity_id: string, destination_host?: string, type?: string) {
+async function onGetMapping(source_entity_id: string, type?: string, source_host?: string, destination_host?: string) {
   const where: {
     sourceCardID: string;
+    sourceServer?: string;
     destinationServer?: string;
     type?: string;
   } = {
@@ -12,6 +13,7 @@ async function onGetMapping(source_entity_id: string, destination_host?: string,
   };
 
   if (destination_host) where.destinationServer = destination_host;
+  if (source_host) where.sourceServer = source_host;
   if (type) where.type = type;
 
   const res = await prisma.syncMapping.findMany({

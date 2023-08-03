@@ -5,7 +5,7 @@ import { Card, Dashboard, DatabaseMeta, Field, Server, SyncStatus, SyncStatusTex
 import { formatHostUrl } from "../../utils";
 import { onGetMapping } from "../../server/database.telefunc";
 import { onCardCreate, onCardList } from "../../server/metabase.card.telefunc";
-import { onCollectionItemsList, onCollectionsList, onCreateCollection } from "../../server/metabase.telefunc";
+import { onCollectionsList, onCreateCollection } from "../../server/metabase.telefunc";
 import { onDashboardCreate, onDashboardList } from "../../server/metbase.dashboard.telefunc";
 
 export { Page };
@@ -49,7 +49,9 @@ function Page() {
         {
           loading: "Syncing collection tree...",
           success: "Collection tree synced!",
-          error: "Failed to sync collection tree",
+          error: (err) => {
+            return "Failed to sync collection tree: " + err.abortValue.errorMessage;
+          },
         }
       );
 
@@ -67,16 +69,16 @@ function Page() {
         {
           loading: "Syncing dashboard...",
           success: "Dashboard synced!",
-          error: "Failed to sync dashboard",
+          error: (err) => {
+            return "Failed to sync dashboard: " + err.abortValue.errorMessage;
+          },
         }
       );
-      if (res["error"]) {
-        throw new Error(res["error"]);
+      if (res["errorMessage"]) {
+        throw new Error(res["errorMessage"]);
       }
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
     } catch (e: any) {
-      await toast.error(e.message);
-      console.error(e);
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
     }
   }
@@ -91,12 +93,12 @@ function Page() {
     if (type === "table") {
       const sourceTable = source_schema?.tables?.find((table) => table?.id == parseInt(source_id));
       if (!sourceTable) {
-        await toast.error("Table " + source_id + " not found in source schema");
+        toast.error("Table " + source_id + " not found in source schema");
         return;
       }
       const destinationTable = destination_schema?.tables?.find((table) => table.name == sourceTable?.name);
       if (!destinationTable) {
-        await toast.error("Table " + sourceTable?.name + " not found in destination schema");
+        toast.error("Table " + sourceTable?.name + " not found in destination schema");
         return;
       }
       return destinationTable?.id;
@@ -113,13 +115,13 @@ function Page() {
         sourceTable = source_schema?.tables?.find((table) => table?.id === sourceField?.table_id);
       }
       if (!sourceField) {
-        await toast.error("Field " + source_id + " not found in source schema");
+        toast.error("Field " + source_id + " not found in source schema");
         return;
       }
       const destTable = destination_schema?.tables?.find((table) => table.name == sourceTable?.name);
       const destinationField = destTable?.fields?.find((field) => field?.name === sourceField?.name);
       if (!destinationField) {
-        await toast.error("Field " + sourceField?.name + " not found in destination schema");
+        toast.error("Field " + sourceField?.name + " not found in destination schema");
         return;
       }
       return destinationField?.id;
@@ -389,7 +391,7 @@ function Page() {
     const destPath = findPath(destination_server.collectionTree, destination_root_id, destination_root_id);
     const destCollectionTree = await onCollectionsList(destination_server.host, destination_server.session_token);
 
-    let lastId = -1;
+    let lastId = parseInt(destination_root_id ?? "-1");
     for (let i = 1; i < sourcePath.length; i++) {
       const collectionName = sourcePath[i];
       const destCollectionID = findCollectionId(destCollectionTree, collectionName);
@@ -441,7 +443,9 @@ function Page() {
         {
           loading: "Syncing collection tree...",
           success: "Collection tree synced!",
-          error: "Failed to sync collection tree",
+          error: (err) => {
+            return "Failed to sync collection tree: " + err.abortValue.errorMessage;
+          },
         }
       );
 
@@ -459,11 +463,13 @@ function Page() {
         {
           loading: "Syncing question...",
           success: "Card synced!",
-          error: "Failed to sync question",
+          error: (err) => {
+            return "Failed to sync question: " + err.abortValue.errorMessage;
+          },
         }
       );
-      if (res["error"]) {
-        throw new Error(res["error"]);
+      if (res["errorMessage"]) {
+        throw new Error(res["errorMessage"]);
       }
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
     } catch (e: any) {
@@ -475,7 +481,7 @@ function Page() {
 
   function getSyncStatusTextColor(status: SyncStatusText): string | undefined {
     switch (status) {
-      case "in-sync":
+      case "synced":
         return "text-blue-500";
       case "outdated":
         return "text-orange-500";
@@ -527,8 +533,7 @@ function Page() {
   function checkChangesRequired(source_question: Card, destination_question: Card) {
     if (source_question.description !== destination_question.description) return true;
     if (source_question.display !== destination_question.display) return true;
-    // if (source_question?.dataset_query?.native?.query !== destination_question?.dataset_query?.native?.query)
-    //   return true;
+    if (source_question.name !== destination_question.name) return true;
 
     return false;
   }
@@ -592,20 +597,30 @@ function Page() {
 
     for (const server of updatedSourceServers) {
       for (const question of server.questions) {
-        const syncedIDs = (await onGetMapping(question.entity_id || "-1")).map((d) => d.destinationCardID);
         for (const destServer of updatedDestServers) {
-          const mapped_ques = destServer.questions.find((q: any) => syncedIDs.includes(q.entity_id || "-1"));
+          let syncedIDs: string[] = [];
+          if (question.entity_type === "dashboard")
+            syncedIDs = (
+              await onGetMapping(question.id.toString() || "-1", "dashboard", server.host, destServer.host)
+            ).map((d) => d.destinationCardID);
+          else
+            syncedIDs = (await onGetMapping(question.entity_id || "-1", "card", server.host, destServer.host)).map(
+              (d) => d.destinationCardID
+            );
+          let mapped_ques;
+          if (question.entity_type === "dashboard")
+            mapped_ques = destServer.questions.find((q: any) => syncedIDs.includes(q.id?.toString() || "-1"));
+          else mapped_ques = destServer.questions.find((q: any) => syncedIDs.includes(q.entity_id || "-1"));
           syncStatusTemp.push({
             id: `${destServer.host}-${question.name}`,
             source_server: server,
             destination_server: destServer,
             question,
-            syncedIDs,
             mapped_ques,
             status: mapped_ques
               ? checkChangesRequired(question, mapped_ques)
                 ? "outdated"
-                : "in-sync"
+                : "synced"
               : ("ready" as SyncStatusText),
             checked: false,
             entity_type: question.entity_type,
@@ -688,7 +703,9 @@ function Page() {
               toast.promise(loadSyncData(), {
                 loading: "Loading sync data...",
                 success: "Sync data loaded!",
-                error: "Failed to load sync data",
+                error: (err) => {
+                  return "Failed to load sync data: " + err.abortValue.errorMessage;
+                },
               });
             }}
             type="button"

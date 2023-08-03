@@ -27,6 +27,7 @@ function ServerInput(props: {
   const [inForm, setInForm] = useState(false);
   const [databasesList, setDatabasesList] = useState<Database[]>([]);
   const [collectionsList, setCollectionsList] = useState<Database[]>([]);
+  const [disableAddButton, setDisableAddButton] = useState(false);
   const [form, setForm] = useState({
     host: "",
     session_token: "",
@@ -98,10 +99,16 @@ function ServerInput(props: {
     if (host.endsWith("/")) host = host.slice(0, -1);
 
     if (form.database != "-1") {
-      const schema = await onDBSchemaFetch(host, form.session_token, form.database);
+      setDisableAddButton(true);
+      const schema = await toast.promise(onDBSchemaFetch(host, form.session_token, form.database), {
+        loading: "Fetching database schema",
+        success: "Database schema fetched!",
+        error: "Error fetching database schema",
+      });
       props.onAdd({ ...form, host, schema });
       setServers((servers) => [...servers, { ...form, host, schema }]);
       resetForm();
+      setDisableAddButton(false);
       return;
     }
 
@@ -298,8 +305,9 @@ function ServerInput(props: {
           <button
             data-testid={`add-${props.type}`}
             type="button"
+            disabled={disableAddButton}
             onClick={addServerClick}
-            className="w-full rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad]"
+            className="w-full rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] disabled:bg-gray-700 disabled:text-white"
           >
             {form.database === "-1" || form.collection === "-1" ? "Fetch Databases & Collections" : "Add Server"}
           </button>

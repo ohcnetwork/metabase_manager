@@ -88,7 +88,7 @@ async function onCardCreate(
     });
 
   if (dest_card_id === undefined && card_data.entity_id && json.entity_id) {
-    const existingMapping = await onGetMapping(card_data.entity_id, dest_host);
+    const existingMapping = await onGetMapping(card_data.entity_id, "card", source_host, dest_host);
 
     if (existingMapping?.length > 0) {
       await onUpdateMapping(card_data.entity_id, json.entity_id, dest_host);
