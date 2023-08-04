@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  postgres:
+    image: postgres:15.3
+    container_name: metabase_manager_postgres
+    environment:
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "postgres"
+      POSTGRES_DB: "metabase_manager"
+    volumes:
+      - metabase_manager_postgres_data:/var/lib/postgresql/data
+
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    environment:
+      DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/metabase_manager?schema=public"
+      NODE_ENV: "production"
+
+volumes:
+  metabase_manager_postgres_data: {}
