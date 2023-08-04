@@ -38,7 +38,7 @@
     "@typescript-eslint/eslint-plugin": "^5.61.0",
     "@typescript-eslint/parser": "^5.61.0",
     "autoprefixer": "^10.4.14",
-    "eslint": "^8.44.0",
+    "eslint": "^8.46.0",
     "postcss": "^8.4.24",
     "prettier-eslint": "^15.0.1",
     "prisma": "^5.0.0",
