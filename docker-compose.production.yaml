@@ -1,0 +1,21 @@
+version: "3.8"
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+  postgres:
+    image: postgres:15.3-bookworm
+    container_name: metabase_manager_production_postgres
+    env_file:
+      - ./.envs/.postgres
+    volumes:
+      - metabase_manager_production_postgres_data:/var/lib/postgresql/data
+volumes:
+  metabase_manager_production_postgres_data: {}
