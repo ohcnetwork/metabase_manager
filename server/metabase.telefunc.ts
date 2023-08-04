@@ -1,95 +1,12 @@
-import { Question } from "../types";
-
-import { config } from "telefunc";
-config.disableNamingConvention = true;
-
-async function getCardCreateBody(
-  host: string,
-  session_token: string,
-  card_data: Question,
-  collection_id?: string,
-  database_id?: string
-) {
-  if (!card_data) return null;
-  if (card_data.dataset_query.type !== "native") {
-    const nativeDataset = await onDatasetQueryConvert(
-      host,
-      session_token,
-      card_data.dataset_query.database,
-      card_data.dataset_query.query,
-      card_data.dataset_query.type
-    );
-    card_data.dataset_query.native = {
-      query: nativeDataset.query,
-    };
-  }
-  return {
-    visualization_settings: card_data.visualization_settings,
-    parameters: card_data.parameters,
-    description: card_data.description,
-    collection_position: card_data.collection_position,
-    result_metadata: card_data.result_metadata,
-    collection_id: collection_id && collection_id != "-1" ? parseInt(collection_id) : null,
-    name: card_data.name,
-    cache_ttl: card_data.cache_ttl,
-    dataset_query: {
-      type: "native",
-      native: { query: card_data.dataset_query.native.query, "template-tags": {} },
-      database: database_id ? parseInt(database_id) : null,
-    },
-    parameter_mappings: card_data.parameter_mappings,
-    display: card_data.display,
-  };
-}
-
-async function onCardList(host: string, session_token: string): Promise<Question[]> {
-  const res = await fetch(`${host}/api/card`, {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Metabase-Session": session_token,
-    },
-  });
-  const json = await res.json();
-  if (json["error"]) throw new Error(json["error"]);
-  return json;
-}
-
-async function onCardCreate(
-  source_host: string,
-  dest_host: string,
-  source_session_token: string,
-  dest_session_token: string,
-  destination_database: string | undefined,
-  card_data: Question,
-  collection_id?: string
-) {
-  const cardDetails = await getCardCreateBody(
-    source_host,
-    source_session_token,
-    card_data,
-    collection_id,
-    destination_database
-  );
-  const res = await fetch(`${dest_host}/api/card`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Metabase-Session": dest_session_token,
-    },
-    body: JSON.stringify(cardDetails),
-  });
-  const json = await res.json();
-  if (json["error"]) throw new Error(json["error"]);
-  return json;
-}
+import { Abort } from "telefunc";
+import { Card } from "../types";
 
 async function onCollectionItemsList(
   host: string,
   session_token: string,
   collection_id: string,
   item_type: string
-): Promise<Question[] | any> {
+): Promise<Card[] | any> {
   const sort_column = "name";
   const sort_direction = "asc";
   const url = `${host}/api/collection/${collection_id}/items?models=${item_type}&sort_column=${sort_column}&sort_direction=${sort_direction}`;
@@ -101,20 +18,49 @@ async function onCollectionItemsList(
     },
   });
   const json = await res.json();
-  if (json["error"]) throw new Error(json["error"]);
+  if (json["cause"]) throw Abort({ errorMessage: json["cause"] });
   return json;
 }
 
 async function onCollectionsList(host: string, session_token: string) {
+  const res = await fetch(
+    `${host}/api/collection/tree?tree=true&exclude-other-user-collections=true&exclude-archived=true`,
+    {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Metabase-Session": session_token,
+      },
+    }
+  );
+  const json = await res.json();
+  if (json["cause"])
+    throw Abort({
+      errorMessage: json["cause"],
+    });
+  return json;
+}
+
+async function onCreateCollection(host: string, session_token: string, collection_name: string, parent_id: string) {
   const res = await fetch(`${host}/api/collection`, {
-    method: "GET",
+    method: "POST",
     headers: {
       "Content-Type": "application/json",
       "X-Metabase-Session": session_token,
     },
+    body: JSON.stringify({
+      parent_id,
+      authority_level: null,
+      description: null,
+      color: "#509EE3",
+      name: collection_name,
+    }),
   });
   const json = await res.json();
-  if (json["error"]) throw new Error(json["error"]);
+  if (json["cause"])
+    throw Abort({
+      errorMessage: json["cause"],
+    });
   return json;
 }
 
@@ -127,7 +73,10 @@ async function onDatabaseList(host: string, session_token: string) {
     },
   });
   const json = await res.json();
-  if (json["error"]) throw new Error(json["error"]);
+  if (json["cause"])
+    throw Abort({
+      errorMessage: json["cause"],
+    });
   return json;
 }
 
@@ -152,7 +101,10 @@ async function onDatasetQueryConvert(
     }),
   });
   const json = await res.json();
-  if (json["error"]) throw new Error(json["error"]);
+  if (json["cause"])
+    throw Abort({
+      errorMessage: json["cause"],
+    });
   return json;
 }
 
@@ -165,16 +117,35 @@ async function onLogin(host: string, email: string, password: string) {
     body: JSON.stringify({ username: email, password: password }),
   });
   const json = await res.json();
-  if (json["error"]) throw new Error(json["error"]);
+  if (json["cause"])
+    throw Abort({
+      errorMessage: json["cause"],
+    });
+  return json;
+}
+
+async function onDBSchemaFetch(host: string, session_token: string, database: string) {
+  const res = await fetch(`${host}/api/database/${database}/metadata`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Metabase-Session": session_token,
+    },
+  });
+  const json = await res.json();
+  if (json["cause"])
+    throw Abort({
+      errorMessage: json["cause"],
+    });
   return json;
 }
 
 export {
-  onCardList,
-  onCardCreate,
   onDatabaseList,
   onCollectionsList,
+  onCreateCollection,
   onDatasetQueryConvert,
   onCollectionItemsList,
   onLogin,
+  onDBSchemaFetch,
 };

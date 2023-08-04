@@ -17,6 +17,7 @@ Metabase Manager is a tool that helps you synchronize your Metabase instances. Y
 - [Prerequisites](#prerequisites)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Docker Deployment](#docker)
 - [Scripts](#scripts)
 - [Contributing](#contributing)
 - [License](#license)
@@ -54,6 +55,12 @@ cd metabase_manager
 npm install
 ```
 
+4. Generate the Prisma client:
+    
+```bash
+npx prisma generate
+```
+
 ## Usage
 
 1. Start the development server:
@@ -67,6 +74,36 @@ npm run dev
 3. Add source and destination instances as needed.
 
 4. Copy question cards between instances.
+
+# Docker Deployment
+
+1. Make sure you have Docker and Docker Compose installed on your system.
+
+2. Clone the repository:
+
+```bash
+git clone https://github.com/coronasafe/metabase_manager.git
+```
+
+3. Change the current directory to the project root:
+
+```bash
+cd metabase_manager
+```
+
+4. Run the `docker-compose build` command to build the images for the services defined in the `docker-compose` file.
+
+```bash
+docker-compose -f docker-compose.production.yaml build
+```
+
+5. Once the images are built, you can start the services using the docker-compose up command.
+
+```bash
+docker-compose -f docker-compose.production.yaml up -d
+```
+
+6. Open your browser and navigate to `http://localhost:3000` to view the application.
 
 ## Scripts
 
