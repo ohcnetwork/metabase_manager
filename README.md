@@ -61,6 +61,12 @@ npm install
 npx prisma generate
 ```
 
+5. Perform an initial migration:
+
+```bash
+npx prisma migrate deploy
+```
+
 ## Usage
 
 1. Start the development server:
