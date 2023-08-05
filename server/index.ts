@@ -1,12 +1,18 @@
 // This file isn't processed by Vite, see https://github.com/brillout/vite-plugin-ssr/issues/562
 //  - Consequently, the server needs be manually restarted when changing this file
-
+import * as Sentry from "@sentry/node";
 import express from "express";
 import compression from "compression";
 import { renderPage } from "vite-plugin-ssr/server";
 import { root } from "./root.js";
 import { telefunc, config } from "telefunc";
+import { env } from "process";
 const isProduction = process.env.NODE_ENV === "production";
+
+Sentry.init({
+  dsn: env.SENTRY_DSN,
+  tracesSampleRate: 0.4,
+});
 
 config.disableNamingConvention = true;
 startServer();
@@ -40,6 +46,9 @@ async function startServer() {
   app.all("/_telefunc", async (req, res) => {
     const context = {};
     const httpResponse = await telefunc({ url: req.originalUrl, method: req.method, body: req.body, context });
+    if (httpResponse.err) {
+      Sentry.captureException(httpResponse.err);
+    }
     const { body, statusCode, contentType } = httpResponse;
     res.status(statusCode).type(contentType).send(body);
   });
@@ -51,6 +60,9 @@ async function startServer() {
       urlOriginal: req.originalUrl,
     };
     const pageContext = await renderPage(pageContextInit);
+    if (pageContext.errorWhileRendering) {
+      Sentry.captureException(pageContext.errorWhileRendering);
+    }
     const { httpResponse } = pageContext;
     if (!httpResponse) return next();
     const { body, statusCode, contentType, earlyHints } = httpResponse;

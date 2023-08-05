@@ -5,11 +5,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 
+COPY . .
+
 # Generate Prisma Client
 RUN npx prisma generate
 
-COPY . .
-
 RUN npm run build
 
-CMD ["npm", "run", "server:prod"]
+CMD ["npm", "run", "server:migrate:prod"]
