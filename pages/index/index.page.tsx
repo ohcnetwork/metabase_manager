@@ -50,7 +50,7 @@ function Page() {
           loading: "Syncing collection tree...",
           success: "Collection tree synced!",
           error: (err) => {
-            return "Failed to sync collection tree: " + err.abortValue.errorMessage;
+            return "Failed to sync collection tree: " + (err?.abortValue?.errorMessage || err.message);
           },
         }
       );
@@ -70,7 +70,7 @@ function Page() {
           loading: "Syncing dashboard...",
           success: "Dashboard synced!",
           error: (err) => {
-            return "Failed to sync dashboard: " + err.abortValue.errorMessage;
+            return "Failed to sync dashboard: " + (err?.abortValue?.errorMessage || err.message);
           },
         }
       );
@@ -237,7 +237,7 @@ function Page() {
     destination_schema?: DatabaseMeta,
     source_table?: string,
     original_query?: any
-  ): any {
+  ): Promise<any> {
     if (!source_schema || !destination_schema) return query;
     if (Array.isArray(query)) {
       return await Promise.all(
@@ -328,6 +328,14 @@ function Page() {
           }
           if (start) path.pop();
         }
+      } else {
+        const children = jsonObj["children"];
+        if (children) {
+          for (const child of children) {
+            const result = findPath(child, id, startId, path, start);
+            if (result) return result;
+          }
+        }
       }
     }
     return null;
@@ -353,25 +361,44 @@ function Page() {
             if (result) return result;
           }
         }
+      } else {
+        const children = jsonObj["children"];
+        if (children) {
+          for (const child of children) {
+            const result = collectionExists(child, name, startName, start);
+            if (result) return result;
+          }
+        }
       }
     }
     return false;
   }
 
-  function findCollectionId(jsonObj: any, name: string): any {
+  function findCollectionId(jsonObj: any, name: string, startName?: string, start = false): any {
     if (Array.isArray(jsonObj)) {
       for (const item of jsonObj) {
-        const result = findCollectionId(item, name);
+        const result = findCollectionId(item, name, startName, start);
         if (result) return result;
       }
     } else if (typeof jsonObj === "object") {
-      if (jsonObj["name"] === name) {
+      if (jsonObj["name"] == name && start) {
         return jsonObj["id"];
+      } else if (jsonObj["name"] == startName || start) {
+        const children = jsonObj["children"];
+        if (children) {
+          if (start || jsonObj["name"] == startName) {
+            start = true;
+          }
+          for (const child of children) {
+            const result = findCollectionId(child, name, startName, start);
+            if (result) return result;
+          }
+        }
       } else {
         const children = jsonObj["children"];
         if (children) {
           for (const child of children) {
-            const result = findCollectionId(child, name);
+            const result = findCollectionId(child, name, startName, start);
             if (result) return result;
           }
         }
@@ -394,7 +421,7 @@ function Page() {
     let lastId = parseInt(destination_root_id ?? "-1");
     for (let i = 1; i < sourcePath.length; i++) {
       const collectionName = sourcePath[i];
-      const destCollectionID = findCollectionId(destCollectionTree, collectionName);
+      const destCollectionID = findCollectionId(destCollectionTree, collectionName, destPath[i - 1]);
       if (destCollectionID == null) {
         const parentID = lastId == -1 ? findCollectionId(destCollectionTree, destPath[i - 1]) : lastId;
         const newCollectionTree = await onCreateCollection(
@@ -444,7 +471,7 @@ function Page() {
           loading: "Syncing collection tree...",
           success: "Collection tree synced!",
           error: (err) => {
-            return "Failed to sync collection tree: " + err.abortValue.errorMessage;
+            return "Failed to sync collection tree: " + (err?.abortValue?.errorMessage || err.message);
           },
         }
       );
@@ -464,7 +491,7 @@ function Page() {
           loading: "Syncing question...",
           success: "Card synced!",
           error: (err) => {
-            return "Failed to sync question: " + err.abortValue.errorMessage;
+            return "Failed to sync question: " + (err?.abortValue?.errorMessage || err.message);
           },
         }
       );
@@ -473,7 +500,7 @@ function Page() {
       }
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
     } catch (e: any) {
-      await toast.error(e.message);
+      toast.error(e.message);
       console.error(e);
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
     }
@@ -481,7 +508,7 @@ function Page() {
 
   function getSyncStatusTextColor(status: SyncStatusText): string | undefined {
     switch (status) {
-      case "synced":
+      case "in-sync":
         return "text-blue-500";
       case "outdated":
         return "text-orange-500";
@@ -620,7 +647,7 @@ function Page() {
             status: mapped_ques
               ? checkChangesRequired(question, mapped_ques)
                 ? "outdated"
-                : "synced"
+                : "in-sync"
               : ("ready" as SyncStatusText),
             checked: false,
             entity_type: question.entity_type,
@@ -654,6 +681,7 @@ function Page() {
           syncData.mapped_ques?.id
         );
     }
+    loadSyncData();
   }
 
   return (
@@ -704,7 +732,7 @@ function Page() {
                 loading: "Loading sync data...",
                 success: "Sync data loaded!",
                 error: (err) => {
-                  return "Failed to load sync data: " + err.abortValue.errorMessage;
+                  return "Failed to load sync data: " + (err?.abortValue?.errorMessage || err.message);
                 },
               });
             }}

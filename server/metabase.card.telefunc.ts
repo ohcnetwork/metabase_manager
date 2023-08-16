@@ -1,3 +1,4 @@
+import { printRequestError } from ".";
 import { Card } from "../types";
 import { onCreateMapping, onDeleteMapping, onGetMapping, onUpdateMapping } from "./database.telefunc";
 import { Abort } from "telefunc";
@@ -33,10 +34,12 @@ async function onCardList(host: string, session_token: string): Promise<Card[]> 
     },
   });
   const json = await res.json();
-  if (json["cause"])
+  if (json["cause"]) {
+    printRequestError("GET", `${host}/api/card`, json);
     throw Abort({
       errorMessage: json["cause"],
     });
+  }
 
   return json;
 }
@@ -82,10 +85,12 @@ async function onCardCreate(
   });
 
   const json = await res.json();
-  if (json["cause"])
+  if (json["cause"]) {
+    printRequestError(method, url, json, cardDetails);
     throw Abort({
       errorMessage: json["cause"],
     });
+  }
 
   if (dest_card_id === undefined && card_data.entity_id && json.entity_id) {
     const existingMapping = await onGetMapping(card_data.entity_id, "card", source_host, dest_host);

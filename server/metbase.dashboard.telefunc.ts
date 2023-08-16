@@ -2,6 +2,7 @@ import { Abort } from "telefunc";
 import { Dashboard, OrderedCard } from "../types";
 import { onCreateMapping, onDeleteMapping, onGetMapping, onUpdateMapping } from "./database.telefunc";
 import { getCardDetailsByEntityID } from "./metabase.card.telefunc";
+import { printRequestError } from ".";
 
 async function getDashboardCreateBody(dashboard_data: Dashboard, collection_id?: string) {
   if (!dashboard_data) return null;
@@ -24,10 +25,12 @@ async function onDashboardList(host: string, session_token: string): Promise<Das
     },
   });
   const json = await res.json();
-  if (json["cause"])
+  if (json["cause"]) {
+    printRequestError("GET", `${host}/api/dashboard`, json);
     throw Abort({
       errorMessage: json["cause"],
     });
+  }
 
   return json;
 }
@@ -136,22 +139,21 @@ async function onDashboardCreate(
 
     for (const ordered_card of existingDashboardData.ordered_cards ?? []) {
       if (!ordered_card?.card?.entity_id) continue; //Exclude text, link and other non question cards
-
-      const card_res = await fetch(
-        `${dest_host}/api/dashboard/${dest_dashboard_id}/cards?dashcardId=${ordered_card.id}`,
-        {
-          method: "DELETE",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Metabase-Session": dest_session_token,
-          },
-        }
-      );
-
-      if (card_res.status != 204)
+      const url = `${dest_host}/api/dashboard/${dest_dashboard_id}/cards?dashcardId=${ordered_card.id}`;
+      const card_res = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Metabase-Session": dest_session_token,
+        },
+      });
+      if (card_res.status != 204) {
+        const card_res_json = await card_res.json();
+        printRequestError("DELETE", url, card_res_json);
         throw Abort({
           errorMessage: `Error while deleting card "${ordered_card.card.name}" from dashboard "${dest_dashboard_id}"`,
         });
+      }
     }
 
     // const dashboard_card_res = await fetch(`${dest_host}/api/dashboard/${dest_dashboard_id}/cards`, {
@@ -181,10 +183,15 @@ async function onDashboardCreate(
     });
 
     const json = await res.json();
-    if (json["cause"])
+    if (json["cause"]) {
+      printRequestError("PUT", `${dest_host}/api/dashboard/${dest_dashboard_id}`, json, {
+        ...existingDashboardData,
+        ordered_cards: [],
+      });
       throw Abort({
         errorMessage: json["cause"],
       });
+    }
   } else {
     method = "POST";
     url = `${dest_host}/api/dashboard`;
@@ -201,10 +208,12 @@ async function onDashboardCreate(
     });
 
     const json = await res.json();
-    if (json["cause"])
+    if (json["cause"]) {
+      printRequestError(method, url, json, dashboardCreateDetails);
       throw Abort({
         errorMessage: json["cause"],
       });
+    }
 
     const existingMapping = await onGetMapping(dashboard_data?.id?.toString(), "dashboard", source_host, dest_host);
 
@@ -234,10 +243,12 @@ async function onDashboardCreate(
   });
 
   const json_update = await res.json();
-  if (json_update["cause"])
+  if (json_update["cause"]) {
+    printRequestError(method, url, json_update, dashboardUpdateDetails);
     throw Abort({
       errorMessage: json_update["cause"],
     });
+  }
 
   const dashboard_cards = [];
 
@@ -256,30 +267,32 @@ async function onDashboardCreate(
       dest_session_token,
       destCardSyncedId?.[0]?.destinationCardID || ""
     );
-
+    const postBody = {
+      cardId: dest_card_data?.id,
+      col: ordered_card.col || 0,
+      row: ordered_card.row || 0,
+      size_x: ordered_card.size_x || 4,
+      size_y: ordered_card.size_y || 3,
+      series: ordered_card.series || [],
+      parameter_mappings: ordered_card.parameter_mappings || [],
+      visualization_settings: ordered_card.visualization_settings || {},
+    };
     const card_res = await fetch(`${dest_host}/api/dashboard/${dashboard_id}/cards`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Metabase-Session": dest_session_token,
       },
-      body: JSON.stringify({
-        cardId: dest_card_data?.id,
-        col: ordered_card.col || 0,
-        row: ordered_card.row || 0,
-        size_x: ordered_card.size_x || 4,
-        size_y: ordered_card.size_y || 3,
-        series: ordered_card.series || [],
-        parameter_mappings: ordered_card.parameter_mappings || [],
-        visualization_settings: ordered_card.visualization_settings || {},
-      }),
+      body: JSON.stringify(postBody),
     });
     const card_res_json = await card_res.json();
 
-    if (card_res_json["cause"])
+    if (card_res_json["cause"]) {
+      printRequestError("POST", `${dest_host}/api/dashboard/${dashboard_id}/cards`, card_res_json, postBody);
       throw Abort({
         errorMessage: card_res_json["cause"],
       });
+    }
 
     const dest_card_id = card_res_json["id"];
 
@@ -305,10 +318,14 @@ async function onDashboardCreate(
   });
   const card_res_json = await dashboard_card_res.json();
 
-  if (card_res_json["cause"])
+  if (card_res_json["cause"]) {
+    printRequestError("PUT", `${dest_host}/api/dashboard/${dashboard_id}/cards`, card_res_json, {
+      cards: dashboard_cards,
+    });
     throw Abort({
       errorMessage: card_res_json["cause"],
     });
+  }
 
   return card_res_json;
 }
