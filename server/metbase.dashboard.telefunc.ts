@@ -2,19 +2,7 @@ import { Abort } from "telefunc";
 import { Dashboard, OrderedCard } from "../types";
 import { onCreateMapping, onDeleteMapping, onGetMapping, onUpdateMapping } from "./database.telefunc";
 import { getCardDetailsByEntityID } from "./metabase.card.telefunc";
-function printRequestError(method: string, url: string, resJSON: any, reqJSON?: any) {
-  try {
-    console.error(`
-    ERROR
-    ===============>
-    ${method} | ${url}
-    ${JSON.stringify(reqJSON, null, 2)}
-    <==============
-    ${JSON.stringify(resJSON, null, 2)}`);
-  } catch (e) {
-    console.error(method, url, reqJSON, resJSON);
-  }
-}
+import { printRequestError } from "./utils";
 
 async function getDashboardCreateBody(dashboard_data: Dashboard, collection_id?: string) {
   if (!dashboard_data) return null;

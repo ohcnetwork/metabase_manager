@@ -1,19 +1,7 @@
-function printRequestError(method: string, url: string, resJSON: any, reqJSON?: any) {
-  try {
-    console.error(`
-    ERROR
-    ===============>
-    ${method} | ${url}
-    ${JSON.stringify(reqJSON, null, 2)}
-    <==============
-    ${JSON.stringify(resJSON, null, 2)}`);
-  } catch (e) {
-    console.error(method, url, reqJSON, resJSON);
-  }
-}
 import { Card } from "../types";
 import { onCreateMapping, onDeleteMapping, onGetMapping, onUpdateMapping } from "./database.telefunc";
 import { Abort } from "telefunc";
+import { printRequestError } from "./utils";
 
 async function getCardCreateBody(card_data: Card, collection_id?: string, database_id?: string) {
   if (!card_data) return null;
