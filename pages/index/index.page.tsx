@@ -240,37 +240,64 @@ function Page() {
   ): Promise<any> {
     if (!source_schema || !destination_schema) return query;
     if (Array.isArray(query)) {
-      return await Promise.all(
-        query.map(async (item, _) => {
-          if (Array.isArray(item) && item[0] === "field") {
-            const mappedID = await getDestMapping(item[1], source_schema, destination_schema, "field", source_table);
-            const rest_elements = item.slice(2);
-            if (Array.isArray(rest_elements)) {
-              for (let i = 0; i < rest_elements.length; i++) {
-                if (Array.isArray(rest_elements[i])) {
-                  rest_elements[i] = await transformQuery(
-                    rest_elements[i],
-                    source_schema,
-                    destination_schema,
-                    source_table,
-                    original_query
-                  );
-                } else if (typeof rest_elements[i] === "object" && rest_elements[i] !== null) {
-                  rest_elements[i] = await transformQuery(
-                    rest_elements[i],
-                    source_schema,
-                    destination_schema,
-                    source_table,
-                    original_query
-                  );
+      if (Array.isArray(query) && query[0] === "field") {
+        const mappedID = await getDestMapping(query[1], source_schema, destination_schema, "field", source_table);
+        const rest_elements = query.slice(2);
+        if (Array.isArray(rest_elements)) {
+          for (let i = 0; i < rest_elements.length; i++) {
+            if (Array.isArray(rest_elements[i])) {
+              rest_elements[i] = await transformQuery(
+                rest_elements[i],
+                source_schema,
+                destination_schema,
+                source_table,
+                original_query
+              );
+            } else if (typeof rest_elements[i] === "object" && rest_elements[i] !== null) {
+              rest_elements[i] = await transformQuery(
+                rest_elements[i],
+                source_schema,
+                destination_schema,
+                source_table,
+                original_query
+              );
+            }
+          }
+        }
+        return ["field", mappedID].concat(rest_elements);
+      } else {
+        return await Promise.all(
+          query.map(async (item, _) => {
+            if (Array.isArray(item) && item[0] === "field") {
+              const mappedID = await getDestMapping(item[1], source_schema, destination_schema, "field", source_table);
+              const rest_elements = item.slice(2);
+              if (Array.isArray(rest_elements)) {
+                for (let i = 0; i < rest_elements.length; i++) {
+                  if (Array.isArray(rest_elements[i])) {
+                    rest_elements[i] = await transformQuery(
+                      rest_elements[i],
+                      source_schema,
+                      destination_schema,
+                      source_table,
+                      original_query
+                    );
+                  } else if (typeof rest_elements[i] === "object" && rest_elements[i] !== null) {
+                    rest_elements[i] = await transformQuery(
+                      rest_elements[i],
+                      source_schema,
+                      destination_schema,
+                      source_table,
+                      original_query
+                    );
+                  }
                 }
               }
+              return ["field", mappedID].concat(rest_elements);
             }
-            return ["field", mappedID].concat(rest_elements);
-          }
-          return await transformQuery(item, source_schema, destination_schema, source_table, original_query);
-        })
-      );
+            return await transformQuery(item, source_schema, destination_schema, source_table, original_query);
+          })
+        );
+      }
     } else if (typeof query === "object" && query !== null) {
       const newQuery: {
         [key: string]: any;
@@ -457,6 +484,21 @@ function Page() {
           undefined,
           question.dataset_query.query
         );
+      } else {
+        const mappedQuery = { ...question_query.native };
+
+        for (const key in question_query.native) {
+          if (key == "query") continue;
+          mappedQuery[key] = await transformQuery(
+            mappedQuery[key],
+            sourceServer.schema,
+            destinationServer.schema,
+            undefined,
+            question.dataset_query.native[key]
+          );
+        }
+
+        question_query.native = mappedQuery;
       }
 
       const destCollectionID = await toast.promise(
