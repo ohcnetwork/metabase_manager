@@ -3,7 +3,7 @@ import { ServerInput } from "../../components/ServerInput";
 import { Toaster, toast } from "react-hot-toast";
 import { Card, Dashboard, DatabaseMeta, Field, Server, SyncStatus, SyncStatusText, Table } from "../../types";
 import { formatHostUrl } from "../../utils";
-import { onGetMapping } from "../../server/database.telefunc";
+import { onCreateMapping, onGetMapping } from "../../server/database.telefunc";
 import { onCardCreate, onCardList } from "../../server/metabase.card.telefunc";
 import { onCollectionsList, onCreateCollection } from "../../server/metabase.telefunc";
 import { onDashboardCreate, onDashboardList } from "../../server/metbase.dashboard.telefunc";
@@ -331,6 +331,7 @@ function Page() {
       return query;
     }
   }
+
   function findPath(jsonObj: any, id?: string, startId: string | null = null, path: string[] = [], start = false): any {
     if (Array.isArray(jsonObj)) {
       for (const item of jsonObj) {
@@ -368,37 +369,30 @@ function Page() {
     return null;
   }
 
-  function collectionExists(jsonObj: any, name: string, startName?: string, start = false): any {
-    if (Array.isArray(jsonObj)) {
-      for (const item of jsonObj) {
-        const result = collectionExists(item, name, startName, start);
-        if (result) return result;
-      }
-    } else if (typeof jsonObj === "object") {
-      if (jsonObj["name"] == name && start) {
-        return true;
-      } else if (jsonObj["name"] == startName || start) {
-        const children = jsonObj["children"];
-        if (children) {
-          if (start || jsonObj["name"] == startName) {
-            start = true;
-          }
-          for (const child of children) {
-            const result = collectionExists(child, name, startName, start);
-            if (result) return result;
-          }
-        }
+  async function getExistingCollectionPath(
+    source_server: Server,
+    destination_server: Server,
+    source_root_id: string | undefined,
+    destination_root_id: string | undefined,
+    source_card_collection_id: string | undefined
+  ) {
+    const sourcePath = findPath(source_server.collectionTree, source_card_collection_id, source_root_id);
+    const destPath = findPath(destination_server.collectionTree, destination_root_id, destination_root_id);
+    const destCollectionTree = await onCollectionsList(destination_server.host, destination_server.session_token);
+
+    let lastId = parseInt(destination_root_id ?? "-1");
+    for (let i = 1; i < sourcePath.length; i++) {
+      const collectionName = sourcePath[i];
+      const destCollectionID = findCollectionId(destCollectionTree, collectionName, destPath[i - 1]);
+
+      if (destCollectionID == null) {
+        return -1;
       } else {
-        const children = jsonObj["children"];
-        if (children) {
-          for (const child of children) {
-            const result = collectionExists(child, name, startName, start);
-            if (result) return result;
-          }
-        }
+        lastId = destCollectionID;
+        destPath.push(collectionName);
       }
     }
-    return false;
+    return lastId;
   }
 
   function findCollectionId(jsonObj: any, name: string, startName?: string, start = false): any {
@@ -667,6 +661,9 @@ function Page() {
     for (const server of updatedSourceServers) {
       for (const question of server.questions) {
         for (const destServer of updatedDestServers) {
+          const destQuestions = await onCardList(destServer.host, destServer.session_token);
+          const destDashboards = await onDashboardList(destServer.host, destServer.session_token);
+
           let syncedIDs: string[] = [];
           if (question.entity_type === "dashboard")
             syncedIDs = (
@@ -680,6 +677,48 @@ function Page() {
           if (question.entity_type === "dashboard")
             mapped_ques = destServer.questions.find((q: any) => syncedIDs.includes(q.id?.toString() || "-1"));
           else mapped_ques = destServer.questions.find((q: any) => syncedIDs.includes(q.entity_id || "-1"));
+
+          if (!mapped_ques) {
+            const destCollectionID = await getExistingCollectionPath(
+              server,
+              destServer,
+              server.collection,
+              destServer.collection,
+              question.collection_id?.toString()
+            );
+            if (destCollectionID != -1) {
+              if (question.entity_type === "dashboard") {
+                const destDashboard = destDashboards.find(
+                  (q: any) => q.name === question.name && q.collection_id?.toString() === destCollectionID?.toString()
+                );
+                if (destDashboard) {
+                  mapped_ques = destDashboard;
+                  await onCreateMapping(
+                    question.id.toString() || "-1",
+                    destDashboard.id.toString() || "-1",
+                    server.host,
+                    destServer.host,
+                    "dashboard"
+                  );
+                }
+              } else {
+                const destQuestion = destQuestions.find(
+                  (q: any) => q.name === question.name && q.collection_id?.toString() === destCollectionID?.toString()
+                );
+                if (destQuestion) {
+                  mapped_ques = destQuestion;
+                  await onCreateMapping(
+                    question.entity_id || "-1",
+                    destQuestion.entity_id || "-1",
+                    server.host,
+                    destServer.host,
+                    "card"
+                  );
+                }
+              }
+            }
+          }
+
           syncStatusTemp.push({
             id: `${destServer.host}-${question.name}`,
             source_server: server,
