@@ -3,7 +3,7 @@ import { ServerInput } from "../../components/ServerInput";
 import { Toaster, toast } from "react-hot-toast";
 import { Card, Dashboard, DatabaseMeta, Field, Server, SyncStatus, SyncStatusText, Table } from "../../types";
 import { formatHostUrl } from "../../utils";
-import { onCreateMapping, onGetMapping } from "../../server/database.telefunc";
+import { onCreateMapping, onGetMapping, onUpdateMapping } from "../../server/database.telefunc";
 import { onCardCreate, onCardList } from "../../server/metabase.card.telefunc";
 import { onCollectionsList, onCreateCollection } from "../../server/metabase.telefunc";
 import { onDashboardCreate, onDashboardList } from "../../server/metbase.dashboard.telefunc";
@@ -12,6 +12,7 @@ export { Page };
 
 function Page() {
   const [sourceServers, setSourceServers] = useState<Server[]>([]);
+  const [proceedLoading, setProceedLoading] = useState(false);
   const [destinationServers, setDestinationServers] = useState<Server[]>([]);
   const [syncStatus, setSyncStatus] = useState<SyncStatus[]>([]);
   const [progressBar, setProgressBar] = useState({
@@ -693,13 +694,21 @@ function Page() {
                 );
                 if (destDashboard) {
                   mapped_ques = destDashboard;
-                  await onCreateMapping(
-                    question.id.toString() || "-1",
-                    destDashboard.id.toString() || "-1",
-                    server.host,
-                    destServer.host,
-                    "dashboard"
-                  );
+                  if (syncedIDs.length == 0) {
+                    await onCreateMapping(
+                      question.id.toString() || "-1",
+                      destDashboard.id.toString() || "-1",
+                      server.host,
+                      destServer.host,
+                      "dashboard"
+                    );
+                  } else {
+                    await onUpdateMapping(
+                      question.id.toString() || "-1",
+                      destDashboard.id.toString() || "-1",
+                      destServer.host
+                    );
+                  }
                 }
               } else {
                 const destQuestion = destQuestions.find(
@@ -707,20 +716,24 @@ function Page() {
                 );
                 if (destQuestion) {
                   mapped_ques = destQuestion;
-                  await onCreateMapping(
-                    question.entity_id || "-1",
-                    destQuestion.entity_id || "-1",
-                    server.host,
-                    destServer.host,
-                    "card"
-                  );
+                  if (syncedIDs.length == 0) {
+                    await onCreateMapping(
+                      question.entity_id || "-1",
+                      destQuestion.entity_id || "-1",
+                      server.host,
+                      destServer.host,
+                      "card"
+                    );
+                  } else {
+                    await onUpdateMapping(question.entity_id || "-1", destQuestion.entity_id || "-1", destServer.host);
+                  }
                 }
               }
             }
           }
 
           syncStatusTemp.push({
-            id: `${destServer.host}-${question.name}`,
+            id: `${destServer.host}-${question.name}-${question.entity_id ?? question.id}`,
             source_server: server,
             destination_server: destServer,
             question,
@@ -804,21 +817,27 @@ function Page() {
       {syncStatus.length === 0 && (
         <div className="mt-5 justify-center flex flex-col mx-auto max-w-4xl text-base leading-7 border rounded-lg border-gray-300 px-8 py-6">
           <button
-            onClick={() => {
+            disabled={proceedLoading}
+            onClick={async () => {
               if (sourceServers.length === 0 || destinationServers.length === 0) {
                 toast.error("Please add at least one source and destination instance");
                 return;
               }
-              toast.promise(loadSyncData(), {
+              setProceedLoading(true);
+              await toast.promise(loadSyncData(), {
                 loading: "Loading sync data...",
                 success: "Sync data loaded!",
                 error: (err) => {
-                  return "Failed to load sync data: " + (err?.abortValue?.errorMessage || err.message);
+                  {
+                    setProceedLoading(false);
+                    return "Failed to load sync data: " + (err?.abortValue?.errorMessage || err.message);
+                  }
                 },
               });
+              setProceedLoading(false);
             }}
             type="button"
-            className="rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
+            className="rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
           >
             Proceed
           </button>
@@ -883,9 +902,9 @@ function Page() {
                       return a.id.localeCompare(b.id);
                     }
                   })
-                  .map((status: SyncStatus, index: number) => (
+                  .map((status: SyncStatus, _index: number) => (
                     <tr
-                      key={status.id + status.entity_type}
+                      key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
                       className="bg-white border-b hover:bg-gray-50"
                       onClick={() => {
                         setSyncStatus((syncStatus) =>
@@ -896,7 +915,9 @@ function Page() {
                       <td className="w-4 p-4">
                         <div className="flex items-center">
                           <input
-                            id={`checkbox-table-${status.id}-${status.entity_type}`}
+                            id={`checkbox-table-${status.id}-${status.entity_type}-${
+                              status.question.entity_id ?? status.question.id
+                            }`}
                             type="checkbox"
                             checked={status.checked}
                             onChange={(e) => {
@@ -907,7 +928,12 @@ function Page() {
                             }}
                             className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                           />
-                          <label htmlFor={`checkbox-table-${index}`} className="sr-only">
+                          <label
+                            htmlFor={`checkbox-table-${status.id}-${status.entity_type}-${
+                              status.question.entity_id ?? status.question.id
+                            }`}
+                            className="sr-only"
+                          >
                             checkbox
                           </label>
                         </div>
@@ -919,7 +945,10 @@ function Page() {
                         {formatHostUrl(status.destination_server.host)}
                       </td>
                       <td scope="row" className="py-4 px-2 font-medium text-gray-900">
-                        {status.question.name} <p className="text-xs text-gray-500">({status.entity_type})</p>
+                        {status.question.name}{" "}
+                        <p className="text-xs text-gray-500">
+                          ({status.entity_type}) ({status.question.entity_id ?? status.question.id})
+                        </p>
                       </td>
                       <td scope="row" className="py-2 px-2 text-gray-800 text-[12px]">
                         {status.collection_path?.join("/")}
