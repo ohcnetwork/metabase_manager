@@ -63,6 +63,7 @@ async function startServer() {
       }
     } catch (e) {
       console.error("Error sending to sentry", e);
+      Sentry.captureException(e);
     }
     const { body, statusCode, contentType } = httpResponse;
     res.status(statusCode).type(contentType).send(body);
