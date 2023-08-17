@@ -6,7 +6,7 @@
     "server": "ts-node ./server/index.ts",
     "server:prod": "cross-env NODE_ENV=production ts-node ./server/index.ts",
     "lint": "eslint . --max-warnings 0",
-    "server:migrate:prod": "prisma migrate deploy && npm run server:prod"
+    "server:migrate:prod": "prisma migrate deploy && npm run server"
   },
   "dependencies": {
     "@prisma/client": "^5.0.0",
