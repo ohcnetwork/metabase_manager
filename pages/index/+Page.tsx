@@ -8,9 +8,7 @@ import { onCardCreate, onCardList } from "../../server/metabase.card.telefunc";
 import { onCollectionsList, onCreateCollection } from "../../server/metabase.telefunc";
 import { onDashboardCreate, onDashboardList } from "../../server/metbase.dashboard.telefunc";
 
-export { Page };
-
-function Page() {
+export default function Page() {
   const [sourceServers, setSourceServers] = useState<Server[]>([]);
   const [proceedLoading, setProceedLoading] = useState(false);
   const [destinationServers, setDestinationServers] = useState<Server[]>([]);
