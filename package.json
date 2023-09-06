@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "hattip serve ./hattip-entry.ts --client",
     "build": "hattip build ./hattip-entry.ts --client",
-    "server:prod": "cross-env NODE_ENV=production HOST=0.0.0.0 node ./dist/server/index.mjs",
+    "server:prod": "cross-env HOST=0.0.0.0 node ./dist/server/index.mjs",
     "prisma:studio": "prisma studio",
     "prisma:generate": "prisma generate",
     "lint": "eslint . --max-warnings 0",
