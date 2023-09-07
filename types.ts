@@ -39,9 +39,12 @@ export type Dashboard = {
   parameters?: any[];
   points_of_interest?: null;
   position?: null;
+  display?: any;
   public_uuid?: null;
   show_in_getting_started?: boolean;
   updated_at?: string;
+  collection_path?: string[];
+  entity_type: "dashboard";
 };
 
 export type Card = {
@@ -59,6 +62,8 @@ export type Card = {
   parameter_mappings?: any;
   display?: any;
   archived?: boolean;
+  collection_path?: string[];
+  entity_type: "card";
 };
 
 export type Server = {
@@ -282,3 +287,12 @@ export type SemanticType =
 export type VisibilityType = "normal" | "details-only";
 
 export type Schema = "public";
+
+export type SyncMapping = {
+  id: number;
+  type: string;
+  sourceServer: string;
+  sourceCardID: string;
+  destinationServer: string;
+  destinationCardID: string;
+};

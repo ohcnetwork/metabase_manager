@@ -1,0 +1,21 @@
+import { printRequestError } from "@/utils";
+import { NextRequest, NextResponse } from "next/server";
+
+export async function GET(req: NextRequest) {
+  const { host, session_token, database } = Object.fromEntries(req.nextUrl.searchParams.entries());
+  const res = await fetch(`${host}/api/database/${database}/metadata`, {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Metabase-Session": session_token,
+    },
+  });
+
+  const data = await res.json();
+
+  if (data["cause"] || data["errors"]) {
+    printRequestError("GET", `${host}/api/database/${database}/metadata`, data, {}, res);
+    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data }, { status: 500 });
+  }
+  return NextResponse.json(data);
+}

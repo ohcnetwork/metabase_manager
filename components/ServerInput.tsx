@@ -1,16 +1,11 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { Database, Server } from "../types";
 import toast from "react-hot-toast";
-import { onLogin, onCollectionsList, onDatabaseList, onDBSchemaFetch } from "../server/metabase.telefunc";
-import { formatHostUrl } from "../utils";
-import {
-  UncontrolledTreeEnvironment,
-  Tree,
-  StaticTreeDataProvider,
-  InteractionMode,
-  ControlledTreeEnvironment,
-  TreeItemIndex,
-} from "react-complex-tree";
+import { login, collectionList, databaseList, dbSchemaFetch } from "@/app/api";
+import { formatHostUrl } from "@/app/utils";
+import { Tree, InteractionMode, ControlledTreeEnvironment, TreeItemIndex } from "react-complex-tree";
 import "react-complex-tree/lib/style-modern.css";
 
 export { ServerInput };
@@ -53,7 +48,7 @@ function ServerInput(props: {
     if (!host.startsWith("http")) host = "https://" + host;
     if (host.endsWith("/")) host = host.slice(0, -1);
 
-    const databases = await toast.promise(onDatabaseList(host, session_token), {
+    const databases = await toast.promise(databaseList(host, session_token), {
       loading: "Fetching databases",
       success: "Databases fetched!",
       error: "Error fetching databases",
@@ -66,7 +61,7 @@ function ServerInput(props: {
   }
 
   async function fetchSessionToken(host: string) {
-    const session_token = await toast.promise(onLogin(host, form.email, form.password), {
+    const session_token = await toast.promise(login(host, form.email, form.password), {
       loading: "Fetching session token from login credentials",
       success: "Session token fetched!",
       error: "Error fetching session token! Check your credentials",
@@ -84,7 +79,7 @@ function ServerInput(props: {
     if (!host.startsWith("http")) host = "https://" + host;
     if (host.endsWith("/")) host = host.slice(0, -1);
 
-    const collections = await toast.promise(onCollectionsList(host, session_token), {
+    const collections = await toast.promise(collectionList(host, session_token), {
       loading: "Fetching collections",
       success: "Collections fetched!",
       error: "Error fetching collections",
@@ -100,16 +95,21 @@ function ServerInput(props: {
 
     if (form.database != "-1") {
       setDisableAddButton(true);
-      const schema = await toast.promise(onDBSchemaFetch(host, form.session_token, form.database), {
-        loading: "Fetching database schema",
-        success: "Database schema fetched!",
-        error: "Error fetching database schema",
-      });
-      props.onAdd({ ...form, host, schema });
-      setServers((servers) => [...servers, { ...form, host, schema }]);
-      resetForm();
-      setDisableAddButton(false);
-      return;
+      try {
+        const schema = await toast.promise(dbSchemaFetch(host, form.session_token, form.database), {
+          loading: "Fetching database schema",
+          success: "Database schema fetched!",
+          error: "Error fetching database schema",
+        });
+        props.onAdd({ ...form, host, schema });
+        setServers((servers) => [...servers, { ...form, host, schema }]);
+        resetForm();
+        setDisableAddButton(false);
+        return;
+      } catch (e) {
+        setDisableAddButton(false);
+        return;
+      }
     }
 
     let session_token = form.session_token;
@@ -286,7 +286,10 @@ function ServerInput(props: {
               }
               onSelectItems={(items) => {
                 setSelectedItems([items[items.length - 1]]);
-                setForm((form) => ({ ...form, collection: items?.[0]?.toString() }));
+                setForm((form) => ({
+                  ...form,
+                  collection: items?.[0]?.toString(),
+                }));
               }}
             >
               <Tree treeId={`collection-list-${props.type}`} rootItem="root" />
