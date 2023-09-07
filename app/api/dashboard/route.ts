@@ -96,6 +96,7 @@ export async function POST(req: NextRequest) {
   let method;
   let url;
   let dashboard_id = dest_dashboard_id;
+  let existingDashboardData = undefined;
 
   if (dashboard_id && dashboard_id !== undefined) {
     method = "PUT";
@@ -112,7 +113,7 @@ export async function POST(req: NextRequest) {
     });
 
     const existingDashboardDataRes = await fetch(existingDashboardDataUrl.toString());
-    const existingDashboardData = await existingDashboardDataRes.json();
+    existingDashboardData = await existingDashboardDataRes.json();
 
     const res = await fetch(`${dest_host}/api/dashboard/${dest_dashboard_id}`, {
       method: "PUT",
@@ -203,6 +204,15 @@ export async function POST(req: NextRequest) {
   }
 
   const dashboard_cards = [];
+
+  if (existingDashboardData) {
+    for (const ordered_card of existingDashboardData.ordered_cards ?? []) {
+      if (!ordered_card?.card?.entity_id) {
+        dashboard_cards.push(ordered_card); // Add text, link and other non question cards
+      }
+    }
+  }
+
   let negative_index = -1;
   for (const ordered_card of fullDashboardData.ordered_cards ?? []) {
     if (!ordered_card?.card?.entity_id) continue; // Exclude text, link and other non question cards
