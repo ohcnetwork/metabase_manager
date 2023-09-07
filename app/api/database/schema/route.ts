@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
 
   if (data["cause"] || data["errors"]) {
     printRequestError("GET", `${host}/api/database/${database}/metadata`, data, {}, res);
-    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data }, { status: 500 });
+    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data });
   }
   return NextResponse.json(data);
 }

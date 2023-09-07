@@ -23,7 +23,7 @@ export async function collectionList(host: string, session_token: string) {
 export async function GET(req: NextRequest) {
   const { host, session_token } = Object.fromEntries(req.nextUrl.searchParams.entries());
   const data = await collectionList(host, session_token);
-  return NextResponse.json(data, { status: data.error ? 500 : 200 });
+  return NextResponse.json(data);
 }
 
 export async function POST(req: NextRequest) {

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
 
   if (data["cause"] || data["errors"]) {
     printRequestError("POST", `${host}/api/dataset/native`, data, postBody, res);
-    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data }, { status: 500 });
+    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data });
   }
   return NextResponse.json(data);
 }

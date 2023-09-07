@@ -36,7 +36,7 @@ export async function GET(req: NextRequest) {
 
   const data = await dashboardList(host, session_token, dashboard_id);
 
-  return NextResponse.json(data, { status: data.error ? 500 : 200 });
+  return NextResponse.json(data);
 }
 
 async function getDashboardUpdateBody(dashboard_data: Dashboard, collection_id: string | undefined) {
@@ -114,36 +114,13 @@ export async function POST(req: NextRequest) {
     const existingDashboardDataRes = await fetch(existingDashboardDataUrl.toString());
     const existingDashboardData = await existingDashboardDataRes.json();
 
-    for (const ordered_card of existingDashboardData.ordered_cards ?? []) {
-      if (!ordered_card?.card?.entity_id) continue; //Exclude text, link and other non question cards
-      const url = `${dest_host}/api/dashboard/${dest_dashboard_id}/cards?dashcardId=${ordered_card.id}`;
-      const card_res = await fetch(url, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Metabase-Session": dest_session_token,
-        },
-      });
-      if (card_res.status != 204) {
-        const card_res_json = await card_res.json();
-        printRequestError("DELETE", url, card_res_json, {}, card_res);
-        return NextResponse.json(
-          {
-            error: `Error while deleting card "${ordered_card.card.name}" from dashboard "${dest_dashboard_id}"`,
-            raw: card_res_json,
-          },
-          { status: 500 }
-        );
-      }
-    }
-
     const res = await fetch(`${dest_host}/api/dashboard/${dest_dashboard_id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         "X-Metabase-Session": dest_session_token,
       },
-      body: JSON.stringify({ ...existingDashboardData, ordered_cards: [] }),
+      body: JSON.stringify({ ...existingDashboardData }),
     });
 
     const json = await res.json();
@@ -154,11 +131,10 @@ export async function POST(req: NextRequest) {
         json,
         {
           ...existingDashboardData,
-          ordered_cards: [],
         },
         res
       );
-      return NextResponse.json({ error: json["cause"], raw: json }, { status: 500 });
+      return NextResponse.json({ error: json["cause"], raw: json });
     }
   } else {
     method = "POST";
@@ -178,7 +154,7 @@ export async function POST(req: NextRequest) {
     const json = await res.json();
     if (json["cause"]) {
       printRequestError(method, url, json, dashboardCreateDetails, res);
-      return NextResponse.json({ error: json["cause"], raw: json }, { status: 500 });
+      return NextResponse.json({ error: json["cause"], raw: json });
     }
 
     const existingMapping = await getMapping(dashboard_data?.id?.toString(), "dashboard", source_host, dest_host);
@@ -223,7 +199,7 @@ export async function POST(req: NextRequest) {
   const json_update = await res.json();
   if (json_update["cause"]) {
     printRequestError(method, url, json_update, dashboardUpdateDetails, res);
-    return NextResponse.json({ error: json_update["cause"], raw: json_update }, { status: 500 });
+    return NextResponse.json({ error: json_update["cause"], raw: json_update });
   }
 
   const dashboard_cards = [];
@@ -234,10 +210,9 @@ export async function POST(req: NextRequest) {
     const destCardSyncedId = await getMapping(ordered_card?.card?.entity_id ?? "", "card", source_host, dest_host);
 
     if (destCardSyncedId?.length === 0)
-      return NextResponse.json(
-        { error: `Card "${ordered_card?.card?.name}" not found at destination. Please sync the card first.` },
-        { status: 500 }
-      );
+      return NextResponse.json({
+        error: `Card "${ordered_card?.card?.name}" not found at destination. Please sync the card first.`,
+      });
 
     const dest_card_data = await cardList(
       dest_host,
@@ -291,8 +266,8 @@ export async function POST(req: NextRequest) {
       },
       dashboard_card_res
     );
-    return NextResponse.json({ error: card_res_json["cause"], raw: card_res_json }, { status: 500 });
+    return NextResponse.json({ error: card_res_json["cause"], raw: card_res_json });
   }
 
-  return card_res_json;
+  return NextResponse.json(card_res_json);
 }

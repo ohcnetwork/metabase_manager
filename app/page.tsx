@@ -60,7 +60,7 @@ export default function Home() {
           loading: "Syncing collection tree...",
           success: "Collection tree synced!",
           error: (err) => {
-            return "Failed to sync collection tree: " + (err?.abortValue?.error || err.message);
+            return "Failed to sync collection tree: " + err.message;
           },
         }
       );
@@ -80,7 +80,7 @@ export default function Home() {
           loading: "Syncing dashboard...",
           success: "Dashboard synced!",
           error: (err) => {
-            return "Failed to sync dashboard: " + (err?.abortValue?.error || err.message);
+            return "Failed to sync dashboard: " + err.message;
           },
         }
       );
@@ -421,7 +421,7 @@ export default function Home() {
           loading: "Syncing collection tree...",
           success: "Collection tree synced!",
           error: (err) => {
-            return "Failed to sync collection tree: " + (err?.abortValue?.error || err.message);
+            return "Failed to sync collection tree: " + err.message;
           },
         }
       );
@@ -441,7 +441,7 @@ export default function Home() {
           loading: "Syncing question...",
           success: "Card synced!",
           error: (err) => {
-            return "Failed to sync question: " + (err?.abortValue?.error || err.message);
+            return "Failed to sync question: " + err.message;
           },
         }
       );
@@ -611,7 +611,14 @@ export default function Home() {
           syncData.mapped_ques?.id
         );
     }
-    await loadSyncData();
+    await toast.promise(loadSyncData(), {
+      loading: "Refreshing sync data...",
+      success: "Sync data refreshed!",
+      error: (err) => {
+        setProceedLoading(false);
+        return "Failed to refresh sync data: " + err.message;
+      },
+    });
   }
 
   return (
@@ -665,7 +672,7 @@ export default function Home() {
                 success: "Sync data loaded!",
                 error: (err) => {
                   setProceedLoading(false);
-                  return "Failed to load sync data: " + (err?.abortValue?.error || err.message);
+                  return "Failed to load sync data: " + err.message;
                 },
               });
               setProceedLoading(false);

@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
 
   const data = await cardList(host, session_token, card_entity_id);
 
-  return NextResponse.json(data, { status: data.error ? 500 : 200 });
+  return NextResponse.json(data);
 }
 
 async function getCardCreateBody(card_data: Card, collection_id?: string, database_id?: string) {
@@ -105,7 +105,7 @@ export async function POST(req: NextRequest) {
   const data = await fetchRes.json();
   if (data["cause"] || data["errors"]) {
     printRequestError(method, url, data, cardDetails, fetchRes);
-    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data }, { status: 500 });
+    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data });
   }
 
   if (dest_card_id === undefined && card_data.entity_id && data.entity_id) {

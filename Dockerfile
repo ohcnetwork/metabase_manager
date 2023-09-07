@@ -3,8 +3,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 
 # install dependencies
-RUN npm install
+RUN npm ci
 COPY . .
+
+# Generate Prisma Client
+RUN npx prisma generate
 
 # build
 RUN npm run build

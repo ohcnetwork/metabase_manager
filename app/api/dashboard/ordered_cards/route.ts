@@ -54,10 +54,7 @@ export async function POST(req: NextRequest) {
         card: dest_card_data,
       });
     } else {
-      return NextResponse.json(
-        { error: `Card "${ordered_card?.card?.name}" not found at destination` },
-        { status: 500 }
-      );
+      return NextResponse.json({ error: `Card "${ordered_card?.card?.name}" not found at destination` });
     }
   }
 

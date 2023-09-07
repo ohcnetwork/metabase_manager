@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   if (data["cause"] || data["errors"]) {
     printRequestError("POST", req.url, data, { username: "-Redacted-", password: "-Redacted-" }, res);
-    return NextResponse.json({ error: data }, { status: 500 });
+    return NextResponse.json({ error: data });
   }
   return NextResponse.json(data);
 }
