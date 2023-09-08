@@ -249,13 +249,3 @@ export async function createDashboard(
     }),
   });
 }
-
-export async function getSyncData(sourceServers: Server[], destServers: Server[]) {
-  return request("/sync", {
-    method: "POST",
-    body: JSON.stringify({
-      sourceServers,
-      destServers,
-    }),
-  });
-}
