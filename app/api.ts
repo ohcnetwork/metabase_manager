@@ -35,7 +35,9 @@ const request = async (
       throw new Error(text || "Internal Server Error");
     }
   } catch (error: any) {
-    toast.error(`Request Error: \n ${error.message}`);
+    const errorMessage = `Request Error: \n ${error.message}`;
+    console.error(errorMessage);
+    toast.error(errorMessage);
     throw error;
   }
 };
