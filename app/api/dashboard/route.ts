@@ -1,4 +1,4 @@
-import { Dashboard } from "@/types";
+import { Card, Dashboard } from "@/types";
 import { baseUrl, printRequestError } from "@/app/server_utils";
 import { NextRequest, NextResponse } from "next/server";
 import { createMapping, deleteMapping, getMapping, updateMapping } from "../database/mapping/route";
@@ -58,6 +58,25 @@ async function getDashboardUpdateBody(dashboard_data: Dashboard, collection_id: 
     parameters: dashboard_data.parameters,
     points_of_interest: dashboard_data.points_of_interest,
   };
+}
+
+async function replaceCardId(obj: any, source_cards: Card[], source_server: string, dest_server: string): Promise<any> {
+  let missingCards = false;
+  for (let key in obj) {
+    if (typeof obj[key] === "object" && obj[key] !== null) {
+      if (!(await replaceCardId(obj[key], source_cards, source_server, dest_server))) missingCards = true;
+    } else if (key === "card_id") {
+      const card_details = source_cards.find((card) => card.id === obj[key]);
+      const mapping = await getMapping(card_details?.id?.toString() ?? "-1", "card", source_server, dest_server);
+      if (!card_details || mapping.length === 0) {
+        missingCards = true;
+        console.warn(`Card with id ${obj[key]} not found`);
+        continue;
+      }
+      obj[key] = mapping[0];
+    }
+  }
+  return !missingCards;
 }
 
 async function getDashboardCreateBody(dashboard_data: Dashboard, collection_id?: string) {
@@ -142,6 +161,19 @@ export async function POST(req: NextRequest) {
     url = `${dest_host}/api/dashboard`;
 
     const dashboardCreateDetails = await getDashboardCreateBody(dashboard_data, collection_id);
+
+    const source_cards = await cardList(source_host, source_session_token);
+    const replacedResult = await replaceCardId(
+      dashboardCreateDetails?.parameters,
+      source_cards,
+      source_host,
+      dest_host
+    );
+
+    if (!replacedResult)
+      return NextResponse.json({
+        error: "Some cards are used as parameters but not synced yet. Please sync the cards first.",
+      });
 
     const res = await fetch(url, {
       method,
