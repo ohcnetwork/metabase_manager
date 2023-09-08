@@ -1,5 +1,3 @@
-import { Card, Dashboard } from "@/types";
-
 export function formatHostUrl(url: string) {
   return url.replace(/(^\w+:|^)\/\//, "");
 }
@@ -78,12 +76,4 @@ export function findCollectionId(jsonObj: any, name: string, startName?: string,
     }
   }
   return null;
-}
-
-export function checkChangesRequired(source_question: Card | Dashboard, destination_question: Card | Dashboard) {
-  if (source_question.description !== destination_question.description) return true;
-  if (source_question?.display !== destination_question?.display) return true;
-  if (source_question.name !== destination_question.name) return true;
-
-  return false;
 }

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ServerInput } from "@/components/ServerInput";
 import { Toaster, toast } from "react-hot-toast";
 import { Card, Dashboard, DatabaseMeta, Field, Server, SyncMapping, SyncStatus, SyncStatusText, Table } from "@/types";
-import { checkChangesRequired, findCollectionId, findPath, formatHostUrl } from "./utils";
+import { findCollectionId, findPath, formatHostUrl } from "./utils";
 import {
   createMapping,
   getMapping,
@@ -15,7 +15,6 @@ import {
   createDashboard,
   dashboardList,
   collectionList,
-  getSyncData,
 } from "./api";
 
 export default function Home() {
@@ -531,6 +530,14 @@ export default function Home() {
       }
     }
     return result;
+  }
+
+  function checkChangesRequired(source_question: Card | Dashboard, destination_question: Card | Dashboard) {
+    if (source_question.description !== destination_question.description) return true;
+    if (source_question?.display !== destination_question?.display) return true;
+    if (source_question.name !== destination_question.name) return true;
+
+    return false;
   }
 
   async function getExistingCollectionPath(

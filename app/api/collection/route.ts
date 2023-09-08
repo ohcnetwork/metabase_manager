@@ -1,7 +1,8 @@
 import { printRequestError } from "@/app/server_utils";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function collectionList(host: string, session_token: string) {
+export async function GET(req: NextRequest) {
+  const { host, session_token } = Object.fromEntries(req.nextUrl.searchParams.entries());
   const url = `${host}/api/collection/tree?tree=true&exclude-other-user-collections=true&exclude-archived=true`;
   const res = await fetch(url, {
     method: "GET",
@@ -15,14 +16,9 @@ export async function collectionList(host: string, session_token: string) {
 
   if (data["cause"] || data["errors"]) {
     printRequestError("GET", url, data, {}, res);
-    return { error: data["cause"] || data["errors"], raw: data };
+    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data });
   }
-  return data;
-}
 
-export async function GET(req: NextRequest) {
-  const { host, session_token } = Object.fromEntries(req.nextUrl.searchParams.entries());
-  const data = await collectionList(host, session_token);
   return NextResponse.json(data);
 }
 

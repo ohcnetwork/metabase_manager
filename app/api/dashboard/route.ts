@@ -4,7 +4,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createMapping, deleteMapping, getMapping, updateMapping } from "../database/mapping/route";
 import { cardList } from "../card/route";
 
-export async function dashboardList(host: string, session_token: string, dashboard_id?: string) {
+export async function GET(req: NextRequest) {
+  const { host, session_token, dashboard_id } = Object.fromEntries(req.nextUrl.searchParams.entries());
+
   const url = dashboard_id ? `${host}/api/dashboard/${dashboard_id}` : `${host}/api/dashboard`;
   const res = await fetch(url, {
     method: "GET",
@@ -18,23 +20,15 @@ export async function dashboardList(host: string, session_token: string, dashboa
 
   if (data["cause"] || data["errors"]) {
     printRequestError("GET", `${host}/api/dashboard`, data, {}, res);
-    return { error: data["cause"] || data["errors"], raw: data };
+    return NextResponse.json({ error: data["cause"] || data["errors"], raw: data });
   }
 
   if (dashboard_id) {
     if (res.status === 404) {
       await deleteMapping(host, dashboard_id.toString(), "dashboard");
-      return { error: `Dashboard "${dashboard_id}" not found` };
+      return NextResponse.json({ error: "Dashboard not found", raw: data });
     }
   }
-
-  return data;
-}
-
-export async function GET(req: NextRequest) {
-  const { host, session_token, dashboard_id } = Object.fromEntries(req.nextUrl.searchParams.entries());
-
-  const data = await dashboardList(host, session_token, dashboard_id);
 
   return NextResponse.json(data);
 }
