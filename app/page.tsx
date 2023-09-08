@@ -617,12 +617,24 @@ export default function Home() {
     setDestinationServers(updatedDestServers);
 
     const syncStatus: any[] = [];
+    const questions_cache = new Map<string, any>();
+    const dashboard_cards_cache = new Map<string, any>();
+    const collection_path_cache = new Map<string, any>();
 
     for (const server of updatedSourceServers) {
       for (const question of server.questions ?? []) {
         for (const destServer of updatedDestServers) {
-          const destQuestions = await cardList(destServer.host, destServer.session_token);
-          const destDashboards = await dashboardList(destServer.host, destServer.session_token);
+          let destQuestions = questions_cache.get(destServer.host);
+          if (!destQuestions) {
+            destQuestions = await cardList(destServer.host, destServer.session_token);
+            questions_cache.set(destServer.host, destQuestions);
+          }
+
+          let destDashboards = dashboard_cards_cache.get(destServer.host);
+          if (!destDashboards) {
+            destDashboards = await dashboardList(destServer.host, destServer.session_token);
+            dashboard_cards_cache.set(destServer.host, destDashboards);
+          }
 
           let syncedIDs: string[] = [];
           if (question.entity_type === "dashboard")
@@ -642,13 +654,17 @@ export default function Home() {
             mapped_ques = (destServer?.questions as Card[]).find((q: any) => syncedIDs.includes(q.entity_id || "-1"));
 
           if (!mapped_ques) {
-            const destCollectionID = await getExistingCollectionPath(
-              server,
-              destServer,
-              server.collection,
-              destServer.collection,
-              question.collection_id?.toString()
-            );
+            let destCollectionID = collection_path_cache.get(destServer.host);
+            if (!destCollectionID) {
+              destCollectionID = await getExistingCollectionPath(
+                server,
+                destServer,
+                server.collection,
+                destServer.collection,
+                question.collection_id?.toString()
+              );
+              collection_path_cache.set(destServer.host, destCollectionID);
+            }
             if (destCollectionID != -1) {
               if (question.entity_type === "dashboard") {
                 const destDashboard = destDashboards.find(
