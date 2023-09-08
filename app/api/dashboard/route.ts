@@ -60,20 +60,35 @@ async function getDashboardUpdateBody(dashboard_data: Dashboard, collection_id: 
   };
 }
 
-async function replaceCardId(obj: any, source_cards: Card[], source_server: string, dest_server: string): Promise<any> {
+async function replaceCardId(
+  obj: any,
+  source_cards: Card[],
+  dest_cards: Card[],
+  source_server: string,
+  dest_server: string
+): Promise<any> {
   let missingCards = false;
   for (let key in obj) {
     if (typeof obj[key] === "object" && obj[key] !== null) {
-      if (!(await replaceCardId(obj[key], source_cards, source_server, dest_server))) missingCards = true;
+      if (!(await replaceCardId(obj[key], source_cards, dest_cards, source_server, dest_server))) missingCards = true;
     } else if (key === "card_id") {
       const card_details = source_cards.find((card) => card.id === obj[key]);
-      const mapping = await getMapping(card_details?.id?.toString() ?? "-1", "card", source_server, dest_server);
+      const mapping = await getMapping(card_details?.entity_id ?? "-1", "card", source_server, dest_server);
       if (!card_details || mapping.length === 0) {
         missingCards = true;
         console.warn(`Card with id ${obj[key]} not found`);
         continue;
       }
-      obj[key] = mapping[0];
+
+      const dest_card_details = dest_cards.find((card) => card?.entity_id === mapping?.[0]?.destinationCardID);
+
+      if (!dest_card_details) {
+        missingCards = true;
+        console.warn(`Card with id ${obj[key]} not found`);
+        continue;
+      }
+
+      obj[key] = dest_card_details?.id;
     }
   }
   return !missingCards;
@@ -163,9 +178,11 @@ export async function POST(req: NextRequest) {
     const dashboardCreateDetails = await getDashboardCreateBody(dashboard_data, collection_id);
 
     const source_cards = await cardList(source_host, source_session_token);
+    const dest_cards = await cardList(dest_host, dest_session_token);
     const replacedResult = await replaceCardId(
       dashboardCreateDetails?.parameters,
       source_cards,
+      dest_cards,
       source_host,
       dest_host
     );
@@ -219,6 +236,21 @@ export async function POST(req: NextRequest) {
   const fullDashboardData = await fullDashboardDataRes.json();
 
   const dashboardUpdateDetails = await getDashboardUpdateBody(fullDashboardData, collection_id);
+
+  const source_cards = await cardList(source_host, source_session_token);
+  const dest_cards = await cardList(dest_host, dest_session_token);
+  const replacedResult = await replaceCardId(
+    dashboardUpdateDetails?.parameters,
+    source_cards,
+    dest_cards,
+    source_host,
+    dest_host
+  );
+
+  if (!replacedResult)
+    return NextResponse.json({
+      error: "Some cards are used as parameters but not synced yet. Please sync the cards first.",
+    });
 
   const res = await fetch(url, {
     method,
