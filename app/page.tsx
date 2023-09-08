@@ -592,7 +592,17 @@ export default function Home() {
   async function startSync() {
     setSyncLoading(true);
     setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
-    const checkedSyncQues = syncStatus.filter((s) => s.checked);
+    const checkedSyncQues = syncStatus
+      .filter((s) => s.checked)
+      .sort((a, b) => {
+        if (a.entity_type === "dashboard" && b.entity_type !== "dashboard") {
+          return 1;
+        } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
+          return -1;
+        } else {
+          return a.id.localeCompare(b.id);
+        }
+      });
     for (const syncData of checkedSyncQues) {
       if (syncData.entity_type === "dashboard")
         await syncDashboard(
