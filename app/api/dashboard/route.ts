@@ -1,5 +1,5 @@
 import { Dashboard } from "@/types";
-import { baseUrl, printRequestError } from "@/utils";
+import { baseUrl, printRequestError } from "@/app/server_utils";
 import { NextRequest, NextResponse } from "next/server";
 import { createMapping, deleteMapping, getMapping, updateMapping } from "../database/mapping/route";
 import { cardList } from "../card/route";

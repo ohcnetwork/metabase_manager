@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { OrderedCard } from "@/types";
-import { baseUrl } from "@/utils";
+import { baseUrl } from "@/app/server_utils";
 import { getMapping } from "../../database/mapping/route";
 
 export async function POST(req: NextRequest) {

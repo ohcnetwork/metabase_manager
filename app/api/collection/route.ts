@@ -1,4 +1,4 @@
-import { printRequestError } from "@/utils";
+import { printRequestError } from "@/app/server_utils";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function collectionList(host: string, session_token: string) {

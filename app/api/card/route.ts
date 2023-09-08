@@ -1,7 +1,7 @@
 import { Card } from "@/types";
-import { printRequestError } from "@/utils";
 import { NextRequest, NextResponse } from "next/server";
 import { createMapping, deleteMapping, getMapping, updateMapping } from "../database/mapping/route";
+import { printRequestError } from "@/app/server_utils";
 
 export async function cardList(host: string, session_token: string, card_entity_id?: string) {
   const res = await fetch(`${host}/api/card`, {
