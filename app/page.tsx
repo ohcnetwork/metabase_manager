@@ -739,6 +739,8 @@ export default function Home() {
                       return 1;
                     } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
                       return -1;
+                    } else if (a.status !== b.status) {
+                      return a.status.localeCompare(b.status);
                     } else {
                       return a.id.localeCompare(b.id);
                     }
