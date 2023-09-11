@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
     const existingMapping = await getMapping(card_data.entity_id, "card", source_host, dest_host);
 
     if (existingMapping?.length > 0) {
-      await updateMapping(card_data.entity_id, data.entity_id, dest_host);
+      await updateMapping(card_data.entity_id, data.entity_id, dest_host, "card");
     } else {
       await createMapping(card_data.entity_id, data.entity_id, source_host, dest_host, "card");
     }

@@ -684,7 +684,8 @@ export default function Home() {
                     await updateMapping(
                       question.id.toString() || "-1",
                       destDashboard.id.toString() || "-1",
-                      destServer.host
+                      destServer.host,
+                      "dashboard"
                     );
                   }
                 }
@@ -703,7 +704,12 @@ export default function Home() {
                       "card"
                     );
                   } else {
-                    await updateMapping(question.entity_id || "-1", destQuestion.entity_id || "-1", destServer.host);
+                    await updateMapping(
+                      question.entity_id || "-1",
+                      destQuestion.entity_id || "-1",
+                      destServer.host,
+                      "card"
+                    );
                   }
                 }
               }

@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
     const existingMapping = await getMapping(dashboard_data?.id?.toString(), "dashboard", source_host, dest_host);
 
     if (existingMapping?.length > 0) {
-      await updateMapping(dashboard_data?.id?.toString(), json["id"].toString(), dest_host);
+      await updateMapping(dashboard_data?.id?.toString(), json["id"].toString(), dest_host, "dashboard");
     } else {
       await createMapping(dashboard_data?.id?.toString(), json["id"].toString(), source_host, dest_host, "dashboard");
     }

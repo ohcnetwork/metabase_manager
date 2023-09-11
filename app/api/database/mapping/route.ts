@@ -79,12 +79,18 @@ export async function POST(req: NextRequest) {
   }
 }
 
-export async function updateMapping(source_entity_id: string, destination_entity_id: string, destination_host: string) {
+export async function updateMapping(
+  source_entity_id: string,
+  destination_entity_id: string,
+  destination_host: string,
+  type: string
+) {
   return await prisma.syncMapping.update({
     where: {
-      sourceCardID_destinationServer: {
+      sourceCardID_destinationServer_type: {
         sourceCardID: source_entity_id,
         destinationServer: destination_host,
+        type: type,
       },
     },
     data: {
@@ -98,14 +104,16 @@ export async function PATCH(req: NextRequest) {
     source_entity_id,
     destination_entity_id,
     destination_host,
+    type,
   }: {
     source_entity_id: string;
     destination_entity_id: string;
     destination_host: string;
+    type: string;
   } = await req.json();
 
   try {
-    const res = await updateMapping(source_entity_id, destination_entity_id, destination_host);
+    const res = await updateMapping(source_entity_id, destination_entity_id, destination_host, type);
     return NextResponse.json(res);
   } catch (e: any) {
     return NextResponse.json({ error: e.message, raw: e });

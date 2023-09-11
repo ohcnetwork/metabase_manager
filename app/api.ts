@@ -79,10 +79,15 @@ export async function deleteMapping(host: string, entity_id: string, type: strin
   });
 }
 
-export async function updateMapping(source_entity_id: string, destination_entity_id: string, destination_host: string) {
+export async function updateMapping(
+  source_entity_id: string,
+  destination_entity_id: string,
+  destination_host: string,
+  type: string
+) {
   return request("/database/mapping", {
     method: "PATCH",
-    body: JSON.stringify({ source_entity_id, destination_entity_id, destination_host }),
+    body: JSON.stringify({ source_entity_id, destination_entity_id, destination_host, type }),
   });
 }
 
