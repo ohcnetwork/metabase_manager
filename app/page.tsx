@@ -619,7 +619,6 @@ export default function Home() {
     const syncStatus: any[] = [];
     const questions_cache = new Map<string, any>();
     const dashboard_cards_cache = new Map<string, any>();
-    const collection_path_cache = new Map<string, any>();
 
     for (const server of updatedSourceServers) {
       for (const question of server.questions ?? []) {
@@ -654,17 +653,13 @@ export default function Home() {
             mapped_ques = (destServer?.questions as Card[]).find((q: any) => syncedIDs.includes(q.entity_id || "-1"));
 
           if (!mapped_ques) {
-            let destCollectionID = collection_path_cache.get(destServer.host);
-            if (!destCollectionID) {
-              destCollectionID = await getExistingCollectionPath(
-                server,
-                destServer,
-                server.collection,
-                destServer.collection,
-                question.collection_id?.toString()
-              );
-              collection_path_cache.set(destServer.host, destCollectionID);
-            }
+            const destCollectionID = await getExistingCollectionPath(
+              server,
+              destServer,
+              server.collection,
+              destServer.collection,
+              question.collection_id?.toString()
+            );
             if (destCollectionID != -1) {
               if (question.entity_type === "dashboard") {
                 const destDashboard = destDashboards.find(
