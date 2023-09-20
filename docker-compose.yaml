@@ -12,7 +12,10 @@ services:
       - metabase_manager_postgres_data:/var/lib/postgresql/data
 
   web:
-    build: .
+    build:
+      context: .
+      args:
+        SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN}
     ports:
       - "3000:3000"
     depends_on:
@@ -21,6 +24,7 @@ services:
       - .env
     environment:
       DATABASE_URL: "postgresql://postgres:postgres@postgres:5432/metabase_manager?schema=public"
+      SENTRY_AUTH_TOKEN: ${SENTRY_AUTH_TOKEN}
 
 volumes:
   metabase_manager_postgres_data: {}

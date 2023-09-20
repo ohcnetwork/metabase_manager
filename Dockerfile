@@ -6,14 +6,15 @@ COPY package.json package-lock.json ./
 RUN npm ci --frozen-lockfile
 COPY . .
 
-# Generate Prisma Client
+# generate Prisma Client
 RUN npx prisma generate
+
+# set environment variables
+ARG SENTRY_AUTH_TOKEN
+ENV SENTRY_AUTH_TOKEN=$SENTRY_AUTH_TOKEN
 
 # build
 RUN npm run build
-
-# remove dev dependencies
-RUN npm prune --production
 
 FROM node:18-alpine
 WORKDIR /app

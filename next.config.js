@@ -17,7 +17,7 @@ module.exports = withSentryConfig(
     // https://github.com/getsentry/sentry-webpack-plugin#options
 
     // Suppresses source map uploading logs during build
-    silent: true,
+    silent: false,
 
     org: "coronasafe-network",
     project: "metabase_manager",
