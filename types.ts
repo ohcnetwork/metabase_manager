@@ -69,6 +69,8 @@ export type Card = {
 export type Server = {
   host: string;
   session_token: string;
+  email?: string;
+  password?: string;
   database?: string;
   collection?: string;
   questions?: Card[] | Dashboard[];

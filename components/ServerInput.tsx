@@ -12,13 +12,14 @@ export { ServerInput };
 
 function ServerInput(props: {
   type: "source" | "destination";
+  servers: Server[];
   onAdd: (server: Server) => void;
   onRemove: (server: Server) => void;
 }) {
   const [focusedItem, setFocusedItem] = useState<TreeItemIndex>();
   const [expandedItems, setExpandedItems] = useState<TreeItemIndex[]>([]);
   const [selectedItems, setSelectedItems] = useState<TreeItemIndex[]>([]);
-  const [servers, setServers] = useState<Server[]>([]);
+  const [servers, setServers] = useState<Server[]>(props.servers ?? []);
   const [inForm, setInForm] = useState(false);
   const [databasesList, setDatabasesList] = useState<Database[]>([]);
   const [collectionsList, setCollectionsList] = useState<Database[]>([]);
@@ -38,6 +39,10 @@ function ServerInput(props: {
   useEffect(() => {
     setExpandedItems([collectionsList?.[0]?.id?.toString()]);
   }, [collectionsList]);
+
+  useEffect(() => {
+    setServers(props.servers ?? []);
+  }, [props.servers]);
 
   async function fetchDatabases(session_token: string) {
     if (!form.host || !session_token) {

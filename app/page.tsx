@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ServerInput } from "@/components/ServerInput";
 import { Toaster, toast } from "react-hot-toast";
 import { Card, Dashboard, DatabaseMeta, Field, Server, SyncMapping, SyncStatus, SyncStatusText, Table } from "@/types";
-import { findCollectionId, findPath, formatHostUrl } from "./utils";
+import { exportConfig, findCollectionId, findPath, formatHostUrl, importConfig } from "./utils";
 import {
   createMapping,
   getMapping,
@@ -790,6 +790,7 @@ export default function Home() {
         <p className="text-2xl font-bold leading-7 text-zinc-700 text-center">Source Instances</p>
         <ServerInput
           type="source"
+          servers={sourceServers}
           onAdd={(server) => {
             setSourceServers((servers) => [...servers, server]);
           }}
@@ -803,6 +804,7 @@ export default function Home() {
         <p className="text-2xl font-bold text-black text-center">Destination Instances</p>
         <ServerInput
           type="destination"
+          servers={destinationServers}
           onAdd={(server) => {
             setDestinationServers((servers) => [...servers, server]);
           }}
@@ -813,7 +815,32 @@ export default function Home() {
         />
       </div>
       {syncStatus.length === 0 && (
-        <div className="mt-5 justify-center flex flex-col mx-auto max-w-4xl text-base leading-7 border rounded-lg border-gray-300 px-8 py-6">
+        <div className="w-full gap-2 mt-5 justify-center grid-cols-6 sm:grid mx-auto max-w-4xl text-base leading-7 border rounded-lg border-gray-300 px-8 py-6">
+          <button
+            className="w-full col-span-1 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
+            onClick={() => {
+              exportConfig(sourceServers, destinationServers);
+            }}
+          >
+            Export Setup
+          </button>
+          <button
+            className="w-full col-span-1 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white my-2 sm:my-0"
+            onClick={async () => {
+              await importConfig((type, server) => {
+                switch (type) {
+                  case "source":
+                    setSourceServers((servers) => [...servers, server]);
+                    break;
+                  case "destination":
+                    setDestinationServers((servers) => [...servers, server]);
+                    break;
+                }
+              });
+            }}
+          >
+            Import Setup
+          </button>
           <button
             disabled={proceedLoading}
             onClick={async () => {
@@ -832,8 +859,7 @@ export default function Home() {
               });
               setProceedLoading(false);
             }}
-            type="button"
-            className="rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
+            className="w-full col-span-4 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
           >
             Proceed
           </button>
