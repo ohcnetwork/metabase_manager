@@ -34,7 +34,7 @@ export type Dashboard = {
   id: number;
   is_app_page?: boolean;
   name?: string;
-  ordered_cards?: OrderedCard[];
+  dashcards?: OrderedCard[];
   param_fields?: null;
   parameters?: any[];
   points_of_interest?: null;
@@ -66,6 +66,20 @@ export type Card = {
   entity_type: "card";
 };
 
+export type Collection = {
+  id: number;
+  description: string;
+  slug: string;
+  name: string;
+  parent_id: number;
+  entity_id: string;
+  location: string;
+  effective_location: string;
+  created_at: string;
+  is_personal: boolean;
+  namespace: string;
+}
+
 export type Server = {
   host: string;
   session_token: string;
@@ -75,7 +89,9 @@ export type Server = {
   collection?: string;
   questions?: Card[] | Dashboard[];
   schema?: DatabaseMeta;
-  collectionTree?: any;
+  collectionTree?: Collection[] | null;
+  excludedIDs: string[];
+  databaseList?: Database[];
 };
 
 export type Database = {
@@ -96,6 +112,8 @@ export type SyncStatus = {
   checked: boolean;
   entity_type: "card" | "dashboard";
   collection_path: string[];
+  is_dependent: boolean;
+  is_excluded: boolean;
 };
 
 export type DatabaseMeta = {
@@ -297,4 +315,10 @@ export type SyncMapping = {
   sourceCardID: string;
   destinationServer: string;
   destinationCardID: string;
+};
+
+export type Settings = {
+  refreshMapping: boolean;
+  syncMarkdown: boolean;
+  excludeRegex: string;
 };

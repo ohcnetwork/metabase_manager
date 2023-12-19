@@ -1,6 +1,6 @@
-import { Server } from "@/types";
+import { Server, Settings } from "@/types";
 import toast from "react-hot-toast";
-import { collectionList, dbSchemaFetch, login } from "./api";
+import { collectionList, dbSchemaFetch, login, databaseList } from "./api";
 
 export function formatHostUrl(url: string) {
   return url.replace(/(^\w+:|^)\/\//, "");
@@ -91,7 +91,7 @@ export function downloadJson(data: any, filename: string) {
   a.click();
 }
 
-export function exportConfig(sourceServers: Server[], destinationServers: Server[]) {
+export function exportConfig(sourceServers: Server[], destinationServers: Server[], settings: Settings) {
   downloadJson(
     {
       sourceServers: sourceServers.map((s) => ({
@@ -109,7 +109,9 @@ export function exportConfig(sourceServers: Server[], destinationServers: Server
         password: s.password,
         database: s.database,
         collection: s.collection,
+        excludedIDs: s.excludedIDs,
       })),
+      settings,
     },
     `metabase-manager-config-${new Date().toISOString()}.json`
   );
@@ -133,7 +135,7 @@ function validateServer(server: Server) {
 
 async function hydrateServer(server: Server) {
   validateServer(server);
-  let { host, session_token, email, password, database, collection } = server;
+  let { host, session_token, email, password, database, collection, excludedIDs } = server;
 
   if (!host.startsWith("http")) host = "https://" + host;
   if (host.endsWith("/")) host = host.slice(0, -1);
@@ -149,11 +151,13 @@ async function hydrateServer(server: Server) {
 
   const collectionTree = await collectionList(host, session_token);
 
-  return { host, email, password, session_token, database, collection, schema, collectionTree };
+  const databases = (await databaseList(host, session_token));
+
+  return { host, email, password, session_token, database, collection, schema, collectionTree, excludedIDs, databaseList: databases.data };
 }
 
 export function importConfig(
-  callback: (type: string, server: Server) => void
+  callback: (type: string, server: Server, settings: Settings) => void
 ): Promise<{ sourceServers: Server[]; destinationServers: Server[] }> {
   return new Promise((resolve, reject) => {
     const fileSelector = document.createElement("input");
@@ -189,7 +193,7 @@ export function importConfig(
                 },
               });
               hydratedSourceServers.push(hydratedServer);
-              callback("source", hydratedServer);
+              callback("source", hydratedServer, config.settings);
             } catch (e: any) {
               reject(new Error("Error importing source server " + server.host + ": " + e.message));
               return;
@@ -207,7 +211,7 @@ export function importConfig(
                 },
               });
               hydratedDestinationServers.push(hydratedServer);
-              callback("destination", hydratedServer);
+              callback("destination", hydratedServer, config.settings);
             } catch (e: any) {
               reject(new Error("Error importing destination server " + server.host + ": " + e.message));
               return;

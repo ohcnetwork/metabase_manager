@@ -238,7 +238,9 @@ export async function createDashboard(
   destination_database: string | undefined,
   dashboard_data: Dashboard,
   collection_id: string | undefined,
-  dest_dashboard_id: number | undefined
+  dest_dashboard_id: number | undefined,
+  includes_markdown_cards: boolean,
+  markdown_card_exclude_regex: string | undefined
 ) {
   return request("/dashboard", {
     method: "POST",
@@ -251,6 +253,15 @@ export async function createDashboard(
       dashboard_data,
       collection_id,
       dest_dashboard_id,
+      includes_markdown_cards,
+      markdown_card_exclude_regex,
     }),
+  });
+}
+
+export async function clearAllMapping(hosts: string[]) {
+  return request("/database/mapping/clear", {
+    method: "POST",
+    body: JSON.stringify({ hosts }),
   });
 }

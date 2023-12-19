@@ -1,13 +1,56 @@
 import { Card, Dashboard } from "@/types";
 import { baseUrl, printRequestError } from "@/app/server_utils";
 import { NextRequest, NextResponse } from "next/server";
-import { createMapping, deleteMapping, getMapping, updateMapping } from "../database/mapping/route";
-import { cardList } from "../card/route";
+import { createMapping, deleteMapping, getMapping, updateMapping } from "../database/mapping/utils";
+import { cardList } from "../card/utils";
 
 export async function GET(req: NextRequest) {
   const { host, session_token, dashboard_id } = Object.fromEntries(req.nextUrl.searchParams.entries());
 
-  const url = dashboard_id ? `${host}/api/dashboard/${dashboard_id}` : `${host}/api/dashboard`;
+  if (!dashboard_id) {
+    const collectionsResponse = await fetch(`${host}/api/collection`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Metabase-Session": session_token,
+      },
+    });
+    const collections = await collectionsResponse.json();
+
+    if (collections["cause"] || collections["errors"]) {
+      printRequestError("GET", `${host}/api/collection`, collections, {}, collectionsResponse);
+      return NextResponse.json({ error: collections["cause"] || collections["errors"], raw: collectionsResponse });
+    }
+
+    const dashboards = [];
+
+    for (const collection of collections) {
+      const dashFetchUrl = `${host}/api/collection/${collection.id}/items?models=dashboard`;
+
+      const dashboardsResponse = await fetch(dashFetchUrl, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Metabase-Session": session_token,
+        },
+      });
+      const dashboardsRes = await dashboardsResponse.json();
+
+      if (dashboardsRes["cause"] || dashboardsRes["errors"]) {
+        printRequestError("GET", dashFetchUrl, dashboardsRes, {}, dashboardsResponse);
+        return NextResponse.json({ error: dashboardsRes["cause"] || dashboardsRes["errors"], raw: dashboardsResponse });
+      }
+
+      for (const dashboard of dashboardsRes.data) {
+        dashboards.push({ ...dashboard, collection_id: collection.id });
+      }
+
+    }
+
+    return NextResponse.json(dashboards);
+  }
+
+  const url = `${host}/api/dashboard/${dashboard_id}`;
   const res = await fetch(url, {
     method: "GET",
     headers: {
@@ -19,7 +62,7 @@ export async function GET(req: NextRequest) {
   const data = await res.json();
 
   if (data["cause"] || data["errors"]) {
-    printRequestError("GET", `${host}/api/dashboard`, data, {}, res);
+    printRequestError("GET", url, data, {}, res);
     return NextResponse.json({ error: data["cause"] || data["errors"], raw: data });
   }
 
@@ -110,6 +153,8 @@ export async function POST(req: NextRequest) {
     dashboard_data,
     collection_id,
     dest_dashboard_id,
+    includes_markdown_cards,
+    markdown_card_exclude_regex,
   }: {
     source_host: string;
     dest_host: string;
@@ -119,6 +164,8 @@ export async function POST(req: NextRequest) {
     dashboard_data: Dashboard;
     collection_id: string | undefined;
     dest_dashboard_id: number | undefined;
+    includes_markdown_cards: boolean;
+    markdown_card_exclude_regex: string | undefined;
   } = await req.json();
 
   let method;
@@ -264,16 +311,38 @@ export async function POST(req: NextRequest) {
   const dashboard_cards = [];
 
   if (existingDashboardData) {
-    for (const ordered_card of existingDashboardData.ordered_cards ?? []) {
+    for (const ordered_card of existingDashboardData.dashcards ?? []) {
       if (!ordered_card?.card?.entity_id) {
-        dashboard_cards.push(ordered_card); // Add text, link and other non question cards
+        if (includes_markdown_cards) {
+          if (markdown_card_exclude_regex) {
+            const markdownExcludeRegex = new RegExp(markdown_card_exclude_regex ?? "");
+            if (markdownExcludeRegex.test(ordered_card?.visualization_settings?.text)) { // Copying the excluded cards from existing dashboard
+              dashboard_cards.push(ordered_card);
+            }
+          }
+        } else {
+          dashboard_cards.push(ordered_card);
+        }
       }
     }
   }
 
   let negative_index = -1;
-  for (const ordered_card of fullDashboardData.ordered_cards ?? []) {
-    if (!ordered_card?.card?.entity_id) continue; // Exclude text, link and other non question cards
+  const markdownExcludeRegex = new RegExp(markdown_card_exclude_regex ?? "");
+
+  for (const ordered_card of fullDashboardData.dashcards ?? []) {
+    if (!ordered_card?.card?.entity_id) {
+      if (includes_markdown_cards) {
+        if (markdown_card_exclude_regex) {
+          if (!markdownExcludeRegex.test(ordered_card?.visualization_settings?.text)) {
+            dashboard_cards.push(ordered_card);
+          }
+        } else {
+          dashboard_cards.push(ordered_card);
+        }
+      }
+      continue;
+    }
 
     const destCardSyncedId = await getMapping(ordered_card?.card?.entity_id ?? "", "card", source_host, dest_host);
 
@@ -312,14 +381,14 @@ export async function POST(req: NextRequest) {
     negative_index--;
   }
 
-  const dashboard_card_res = await fetch(`${dest_host}/api/dashboard/${dashboard_id}/cards`, {
+  const dashboard_card_res = await fetch(`${dest_host}/api/dashboard/${dashboard_id}`, {
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
       "X-Metabase-Session": dest_session_token,
     },
     body: JSON.stringify({
-      cards: dashboard_cards,
+      dashcards: dashboard_cards,
     }),
   });
   const card_res_json = await dashboard_card_res.json();
@@ -327,7 +396,7 @@ export async function POST(req: NextRequest) {
   if (card_res_json["cause"]) {
     printRequestError(
       "PUT",
-      `${dest_host}/api/dashboard/${dashboard_id}/cards`,
+      `${dest_host}/api/dashboard/${dashboard_id}`,
       card_res_json,
       {
         cards: dashboard_cards,

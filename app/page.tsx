@@ -15,6 +15,7 @@ import {
   createDashboard,
   dashboardList,
   collectionList,
+  clearAllMapping,
 } from "./api";
 
 export default function Home() {
@@ -26,6 +27,12 @@ export default function Home() {
   const [progressBar, setProgressBar] = useState({
     value: 0,
     color: "bg-[#0c80cec5]",
+  });
+
+  const [settings, setSettings] = useState({
+    refreshMapping: false,
+    syncMarkdown: false,
+    excludeRegex: "",
   });
 
   useEffect(() => {
@@ -73,7 +80,9 @@ export default function Home() {
           destinationServer.database,
           dashboard,
           destCollectionID.toString(),
-          mappedDashID
+          mappedDashID,
+          settings.syncMarkdown,
+          settings.excludeRegex
         ),
         {
           loading: "Syncing dashboard...",
@@ -242,6 +251,8 @@ export default function Home() {
 
   async function transformQuery(
     query: any,
+    sourceSrv: Server,
+    destSrv: Server,
     source_schema?: DatabaseMeta,
     destination_schema?: DatabaseMeta,
     source_table?: string,
@@ -257,6 +268,8 @@ export default function Home() {
             if (Array.isArray(rest_elements[i])) {
               rest_elements[i] = await transformQuery(
                 rest_elements[i],
+                sourceSrv,
+                destSrv,
                 source_schema,
                 destination_schema,
                 source_table,
@@ -265,6 +278,8 @@ export default function Home() {
             } else if (typeof rest_elements[i] === "object" && rest_elements[i] !== null) {
               rest_elements[i] = await transformQuery(
                 rest_elements[i],
+                sourceSrv,
+                destSrv,
                 source_schema,
                 destination_schema,
                 source_table,
@@ -285,6 +300,8 @@ export default function Home() {
                   if (Array.isArray(rest_elements[i])) {
                     rest_elements[i] = await transformQuery(
                       rest_elements[i],
+                      sourceSrv,
+                      destSrv,
                       source_schema,
                       destination_schema,
                       source_table,
@@ -293,6 +310,8 @@ export default function Home() {
                   } else if (typeof rest_elements[i] === "object" && rest_elements[i] !== null) {
                     rest_elements[i] = await transformQuery(
                       rest_elements[i],
+                      sourceSrv,
+                      destSrv,
                       source_schema,
                       destination_schema,
                       source_table,
@@ -303,7 +322,15 @@ export default function Home() {
               }
               return ["field", mappedID].concat(rest_elements);
             }
-            return await transformQuery(item, source_schema, destination_schema, source_table, original_query);
+            return await transformQuery(
+              item,
+              sourceSrv,
+              destSrv,
+              source_schema,
+              destination_schema,
+              source_table,
+              original_query
+            );
           })
         );
       }
@@ -325,9 +352,47 @@ export default function Home() {
             "field",
             source_table
           );
+        } else if (key.startsWith("#") && query[key]?.["type"] === "card") {
+          const question_details = sourceSrv?.questions?.find((q) => q.id == query[key]?.["card-id"]) || -1;
+          if (!question_details || question_details === -1) {
+            toast.error(
+              "Failed to find needed depedency at source " +
+                query[key]?.["display-name"] +
+                " in " +
+                sourceSrv.host +
+                ". Make sure the referenced card exists in source collection."
+            );
+            return query;
+          }
+          const mappedCardID = await getMapping(
+            question_details?.entity_id || "-1",
+            "card",
+            sourceSrv.host,
+            destSrv.host
+          );
+          const destCardDetails =
+            destSrv?.questions?.find((q) => q.entity_id == mappedCardID?.[0]?.["destinationCardID"]) || -1;
+          if (!mappedCardID || mappedCardID.length == 0 || !destCardDetails || destCardDetails === -1) {
+            toast.error(
+              "Failed to find needed depedency " +
+                query[key]?.["display-name"] +
+                " in " +
+                destSrv.host +
+                ". Please sync the card first."
+            );
+            return query;
+          }
+          newQuery[key] = {
+            ...query[key],
+            "card-id": destCardDetails.id,
+            name: `#${destCardDetails.id}-${query[key]?.["name"].split("-").slice(1).join("-")}`,
+            "display-name": `#${destCardDetails.id} ${query[key]?.["display-name"].split(" ").slice(1).join(" ")}`,
+          };
         } else {
           newQuery[key] = await transformQuery(
             query[key],
+            sourceSrv,
+            destSrv,
             source_schema,
             destination_schema,
             source_table,
@@ -386,6 +451,8 @@ export default function Home() {
       if (question_query.type != "native") {
         question_query.query = await transformQuery(
           question_query.query,
+          sourceServer,
+          destinationServer,
           sourceServer.schema,
           destinationServer.schema,
           undefined,
@@ -398,11 +465,29 @@ export default function Home() {
           if (key == "query") continue;
           mappedQuery[key] = await transformQuery(
             mappedQuery[key],
+            sourceServer,
+            destinationServer,
             sourceServer.schema,
             destinationServer.schema,
             undefined,
             question.dataset_query.native[key]
           );
+        }
+
+        for (let key in mappedQuery?.["template-tags"]) {
+          if (mappedQuery?.["template-tags"].hasOwnProperty(key)) {
+            if (
+              mappedQuery["template-tags"][key].hasOwnProperty("name") &&
+              key !== mappedQuery["template-tags"][key].name
+            ) {
+              mappedQuery["template-tags"][mappedQuery["template-tags"][key].name] = mappedQuery["template-tags"][key];
+              mappedQuery.query = mappedQuery.query.replace(
+                new RegExp(`{{${key}}`, "g"),
+                `{{${mappedQuery["template-tags"][mappedQuery["template-tags"][key].name].name}}`
+              );
+              delete mappedQuery["template-tags"][key];
+            }
+          }
         }
 
         question_query.native = mappedQuery;
@@ -568,6 +653,10 @@ export default function Home() {
 
   async function loadSyncData(): Promise<void> {
     setSyncLoading(true);
+    if (settings.refreshMapping) {
+      const allServers = [...sourceServers, ...destinationServers];
+      await clearAllMapping(allServers.map((s) => s.host));
+    }
     const updatedSourceServers = await Promise.all(
       sourceServers.map(async (s) => ({
         ...s,
@@ -711,6 +800,13 @@ export default function Home() {
             }
           }
 
+          const is_dependent =
+            question?.entity_type === "question" &&
+            question?.dataset_query?.type === "native" &&
+            Object.keys(question?.dataset_query?.native?.["template-tags"] || {}).some((key) => key.startsWith("#"));
+
+          const is_excluded = destServer.excludedIDs?.includes(question?.entity_id);
+
           syncStatus.push({
             id: `${destServer.host}-${question.name}-${question.entity_id ?? question.id}`,
             source_server: server,
@@ -725,6 +821,8 @@ export default function Home() {
             checked: false,
             entity_type: question.entity_type,
             collection_path: question.collection_path,
+            is_dependent,
+            is_excluded,
           });
         }
       }
@@ -743,6 +841,10 @@ export default function Home() {
         if (a.entity_type === "dashboard" && b.entity_type !== "dashboard") {
           return 1;
         } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
+          return -1;
+        } else if (a.is_dependent && !b.is_dependent) {
+          return 1;
+        } else if (!a.is_dependent && b.is_dependent) {
           return -1;
         } else {
           return a.id.localeCompare(b.id);
@@ -781,7 +883,7 @@ export default function Home() {
       <Toaster position="top-right" />
       <div className="mx-auto max-w-4xl text-base leading-7 text-gray-700 border rounded-lg border-gray-300 px-8 py-8">
         <p className="text-3xl font-semibold leading-7 text-[#034078] text-center">Metabase Manager</p>
-        <p className="mt-3 text-xl leading-8 text">
+        <p className="mt-3 text text-lg">
           Use Metabase Manager to synchronize your Metabase instance. You can copy question cards from the source
           instances to destination instances.
         </p>
@@ -815,55 +917,108 @@ export default function Home() {
         />
       </div>
       {syncStatus.length === 0 && (
-        <div className="w-full gap-2 mt-5 justify-center grid-cols-6 sm:grid mx-auto max-w-4xl text-base leading-7 border rounded-lg border-gray-300 px-8 py-6">
-          <button
-            className="w-full col-span-1 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
-            onClick={() => {
-              exportConfig(sourceServers, destinationServers);
-            }}
-          >
-            Export Setup
-          </button>
-          <button
-            className="w-full col-span-1 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white my-2 sm:my-0"
-            onClick={async () => {
-              await importConfig((type, server) => {
-                switch (type) {
-                  case "source":
-                    setSourceServers((servers) => [...servers, server]);
-                    break;
-                  case "destination":
-                    setDestinationServers((servers) => [...servers, server]);
-                    break;
+        <>
+          <div className="mt-4 border border-gray-300 rounded-lg max-w-4xl mx-auto">
+            <div className="p-4 border-b border-gray-300">
+              <p className="text-2xl font-bold text-black text-center">Settings</p>
+            </div>
+            <div className="p-4">
+              <div className="flex justify-between gap-4">
+                <div className="flex items-center">
+                  <input
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    id="refreshMapping"
+                    type="checkbox"
+                    onChange={(e) => {
+                      setSettings((settings) => ({ ...settings, refreshMapping: e.target.checked }));
+                    }}
+                    checked={settings.refreshMapping}
+                  />
+                  <label className="ml-2 block text-sm text-gray-900" htmlFor="refreshMapping">
+                    Refresh Mapping data
+                  </label>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded"
+                    id="syncMarkdown"
+                    type="checkbox"
+                    onChange={(e) => {
+                      setSettings((settings) => ({ ...settings, syncMarkdown: e.target.checked }));
+                    }}
+                    checked={settings.syncMarkdown}
+                  />
+                  <label className="ml-2 block text-sm text-gray-900" htmlFor="syncMarkdown">
+                    Sync Markdown Cards
+                  </label>
+                </div>
+                <div className={`flex items-center ${settings.syncMarkdown ? "" : "opacity-50"}`}>
+                  <input
+                    className="border-gray-300 rounded shadow-sm p-2 border h-8 w-80"
+                    placeholder="Markdown Cards Blacklist Regex"
+                    type="text"
+                    onChange={(e) => {
+                      setSettings((settings) => ({ ...settings, excludeRegex: e.target.value }));
+                    }}
+                    value={settings.excludeRegex}
+                    disabled={!settings.syncMarkdown}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="w-full gap-2 mt-5 justify-center grid-cols-6 sm:grid mx-auto max-w-4xl text-base leading-7 border rounded-lg border-gray-300 px-8 py-6">
+            <button
+              className="w-full col-span-1 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
+              onClick={() => {
+                exportConfig(sourceServers, destinationServers, settings);
+              }}
+            >
+              Export Setup
+            </button>
+            <button
+              className="w-full col-span-1 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white my-2 sm:my-0"
+              onClick={async () => {
+                await importConfig((type, server, settings) => {
+                  switch (type) {
+                    case "source":
+                      setSourceServers((servers) => [...servers, server]);
+                      settings && setSettings(settings);
+                      break;
+                    case "destination":
+                      setDestinationServers((servers) => [...servers, server]);
+                      settings && setSettings(settings);
+                      break;
+                  }
+                });
+              }}
+            >
+              Import Setup
+            </button>
+            <button
+              disabled={proceedLoading}
+              onClick={async () => {
+                if (sourceServers.length === 0 || destinationServers.length === 0) {
+                  toast.error("Please add at least one source and destination instance");
+                  return;
                 }
-              });
-            }}
-          >
-            Import Setup
-          </button>
-          <button
-            disabled={proceedLoading}
-            onClick={async () => {
-              if (sourceServers.length === 0 || destinationServers.length === 0) {
-                toast.error("Please add at least one source and destination instance");
-                return;
-              }
-              setProceedLoading(true);
-              await toast.promise(loadSyncData(), {
-                loading: "Loading sync data...",
-                success: "Sync data loaded!",
-                error: (err) => {
-                  setProceedLoading(false);
-                  return "Failed to load sync data: " + err.message;
-                },
-              });
-              setProceedLoading(false);
-            }}
-            className="w-full col-span-4 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
-          >
-            Proceed
-          </button>
-        </div>
+                setProceedLoading(true);
+                await toast.promise(loadSyncData(), {
+                  loading: "Loading sync data...",
+                  success: "Sync data loaded!",
+                  error: (err) => {
+                    setProceedLoading(false);
+                    return "Failed to load sync data: " + err.message;
+                  },
+                });
+                setProceedLoading(false);
+              }}
+              className="w-full col-span-4 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
+            >
+              Proceed
+            </button>
+          </div>
+        </>
       )}
       {syncStatus.length > 0 && (
         <div className="mt-5 justify-center flex flex-col mx-auto max-w-6xl text-base leading-7 border rounded-lg border-gray-300 px-8 py-6">
@@ -884,10 +1039,15 @@ export default function Home() {
                       <input
                         id="checkbox-all"
                         type="checkbox"
-                        checked={syncStatus.every((s) => s.checked)}
+                        checked={syncStatus.every((s) => s.checked || s.is_excluded)}
                         onChange={(e) => {
                           const checked = e.target.checked;
-                          setSyncStatus((syncStatus) => syncStatus.map((s) => ({ ...s, checked })));
+                          setSyncStatus((syncStatus) =>
+                            syncStatus.map((s) => {
+                              if (!s.is_excluded) return { ...s, checked };
+                              else return s;
+                            })
+                          );
                         }}
                         className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                       />
@@ -920,8 +1080,10 @@ export default function Home() {
                       return 1;
                     } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
                       return -1;
-                    } else if (a.status !== b.status) {
-                      return a.status.localeCompare(b.status);
+                    } else if (a.is_dependent && !b.is_dependent) {
+                      return 1;
+                    } else if (!a.is_dependent && b.is_dependent) {
+                      return -1;
                     } else {
                       return a.id.localeCompare(b.id);
                     }
@@ -931,6 +1093,7 @@ export default function Home() {
                       key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
                       className="bg-white border-b hover:bg-gray-50"
                       onClick={() => {
+                        if (status.is_excluded) return;
                         setSyncStatus((syncStatus) =>
                           syncStatus.map((s) => (s.id === status.id ? { ...s, checked: !s.checked } : s))
                         );
@@ -944,7 +1107,9 @@ export default function Home() {
                             }`}
                             type="checkbox"
                             checked={status.checked}
+                            disabled={status.is_excluded}
                             onChange={(e) => {
+                              if (status.is_excluded) return;
                               const checked = (e.target as HTMLInputElement).checked;
                               setSyncStatus((syncStatus) =>
                                 syncStatus.map((s) => (s.id === status.id ? { ...s, checked } : s))
@@ -971,7 +1136,8 @@ export default function Home() {
                       <td scope="row" className="py-4 px-2 font-medium text-gray-900">
                         {status.question.name}{" "}
                         <p className="text-xs text-gray-500">
-                          ({status.entity_type}) ({status.question.entity_id ?? status.question.id})
+                          ({status.entity_type}) ({status.question.entity_id ?? status.question.id}){" "}
+                          {status.is_dependent && "(dependent)"} {status.is_excluded && "(excluded)"}
                         </p>
                       </td>
                       <td scope="row" className="py-2 px-2 text-gray-800 text-[12px]">
@@ -979,11 +1145,11 @@ export default function Home() {
                       </td>
                       <td
                         scope="row"
-                        className={`px-2 py-4 font-medium capitalize ${getSyncStatusTextColor(
-                          status.status
-                        )} whitespace-nowrap`}
+                        className={`px-2 py-4 font-medium capitalize ${
+                          status.is_excluded ? "text-orange-500" : getSyncStatusTextColor(status.status)
+                        } whitespace-nowrap`}
                       >
-                        {status.status}
+                        {status.is_excluded ? "Excluded" : status.status}
                       </td>
                     </tr>
                   ))}
