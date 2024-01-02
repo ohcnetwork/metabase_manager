@@ -109,7 +109,7 @@ function ServerInput(props: {
           success: "Database schema fetched!",
           error: "Error fetching database schema",
         });
-        const excludedIDs = form.excludedIDs.split(",");
+        const excludedIDs = form.excludedIDs.split(",").filter((id) => id !== "");
         props.onAdd({ ...form, host, schema, excludedIDs });
         setServers((servers) => [...servers, { ...form, host, schema, excludedIDs }]);
         resetForm();
