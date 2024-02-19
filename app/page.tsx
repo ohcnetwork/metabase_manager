@@ -29,6 +29,42 @@ export default function Home() {
     color: "bg-[#0c80cec5]",
   });
 
+  // Logic for card and path sort
+  const [sortField, setSortField] = useState<"name" | "path" | null>(null);
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
+
+  const toggleSort = (field: "name" | "path") => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDirection("asc"); // Default to ascending when changing sort field
+    }
+  };
+
+  const getSortedSyncStatus = () => {
+    return [...syncStatus].sort((a, b) => {
+      // Default comparison result
+      let comparisonResult = 0;
+
+      // Determine the field to sort by
+      if (sortField === "name") {
+        comparisonResult = a.question.name.localeCompare(b.question.name);
+      } else if (sortField === "path") {
+        const pathA = a.collection_path?.join("/") || "";
+        const pathB = b.collection_path?.join("/") || "";
+        comparisonResult = pathA.localeCompare(pathB);
+      }
+
+      // If sort direction is descending, reverse the comparison result
+      if (sortDirection === "desc") {
+        comparisonResult *= -1;
+      }
+
+      return comparisonResult;
+    });
+  };
+
   const [settings, setSettings] = useState({
     refreshMapping: false,
     syncMarkdown: false,
@@ -1064,9 +1100,15 @@ export default function Home() {
                   </th>
                   <th scope="col" className="py-3 px-2">
                     Card
+                    <button onClick={() => toggleSort("name")}>
+                      {sortField === "name" ? (sortDirection === "asc" ? "🔽" : "🔼") : "⇅"}
+                    </button>
                   </th>
                   <th scope="col" className="py-3 px-2">
                     Path
+                    <button onClick={() => toggleSort("path")}>
+                      {sortField === "path" ? (sortDirection === "asc" ? "🔽" : "🔼") : "⇅"}
+                    </button>
                   </th>
                   <th scope="col" className="py-3 px-2">
                     Status
@@ -1074,20 +1116,7 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {[...syncStatus]
-                  .sort((a, b) => {
-                    if (a.entity_type === "dashboard" && b.entity_type !== "dashboard") {
-                      return 1;
-                    } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
-                      return -1;
-                    } else if (a.is_dependent && !b.is_dependent) {
-                      return 1;
-                    } else if (!a.is_dependent && b.is_dependent) {
-                      return -1;
-                    } else {
-                      return a.id.localeCompare(b.id);
-                    }
-                  })
+                {getSortedSyncStatus()
                   .map((status: SyncStatus, _index: number) => (
                     <tr
                       key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
