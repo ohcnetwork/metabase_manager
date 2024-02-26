@@ -18,7 +18,7 @@ import {
   clearAllMapping,
 } from "./api";
 
-import React, { Fragment } from 'react'; // needed for collapsible
+import React, { Fragment } from "react"; // needed for collapsible
 
 export default function Home() {
   const [sourceServers, setSourceServers] = useState<Server[]>([]);
@@ -69,27 +69,71 @@ export default function Home() {
 
   // add logic for collapsible path sections
 
-  const groupByPath = (syncStatus) => {
+  // const groupByPath = (syncStatus) => {
+  //   const grouped = {};
+  //   syncStatus.forEach((status) => {
+  //     const pathString = status.collection_path?.join("/") || "Uncategorized";
+  //     if (!grouped[pathString]) {
+  //       grouped[pathString] = [];
+  //     }
+  //     grouped[pathString].push(status);
+  //   });
+  //   return grouped;
+  // };
+
+  // const [expandedPaths, setExpandedPaths] = useState({});
+
+  // const togglePath = (pathString) => {
+  //   setExpandedPaths((prevExpandedPaths) => ({
+  //     ...prevExpandedPaths,
+  //     [pathString]: !prevExpandedPaths[pathString],
+  //   }));
+  // };
+  // const syncStatusGroups = groupByPath(syncStatus);
+
+  // UPDATED LOGIC FOR COLLAPSIBLE DESTINATION AND PATH SECTIONS
+  // Update groupByPath to include destination grouping
+  const groupByDestinationAndPath = (syncStatus) => {
     const grouped = {};
     syncStatus.forEach((status) => {
+      const destinationString = formatHostUrl(status.destination_server.host);
       const pathString = status.collection_path?.join("/") || "Uncategorized";
-      if (!grouped[pathString]) {
-        grouped[pathString] = [];
+      if (!grouped[destinationString]) {
+        grouped[destinationString] = {};
       }
-      grouped[pathString].push(status);
+      if (!grouped[destinationString][pathString]) {
+        grouped[destinationString][pathString] = [];
+      }
+      grouped[destinationString][pathString].push(status);
     });
     return grouped;
   };
 
+  // Update the state to track expanded destinations and paths
+  const [expandedDestinations, setExpandedDestinations] = useState({});
   const [expandedPaths, setExpandedPaths] = useState({});
 
-  const togglePath = (pathString) => {
-    setExpandedPaths((prevExpandedPaths) => ({
-      ...prevExpandedPaths,
-      [pathString]: !prevExpandedPaths[pathString],
+  // Add toggle functions for destinations and paths
+  const toggleDestination = (destinationString) => {
+    setExpandedDestinations((prevExpandedDestinations) => ({
+      ...prevExpandedDestinations,
+      [destinationString]: !prevExpandedDestinations[destinationString],
     }));
   };
-  const syncStatusGroups = groupByPath(syncStatus);
+
+  const togglePath = (destinationString, pathString) => {
+    setExpandedPaths((prevExpandedPaths) => ({
+      ...prevExpandedPaths,
+      [destinationString]: {
+        ...prevExpandedPaths[destinationString],
+        [pathString]: !prevExpandedPaths[destinationString]?.[pathString],
+      },
+    }));
+  };
+
+  // Use the updated grouping function
+  const syncStatusGroups = groupByDestinationAndPath(syncStatus);
+  // END OF ADDED LOGIC
 
   const [settings, setSettings] = useState({
     refreshMapping: false,
@@ -1142,79 +1186,99 @@ export default function Home() {
                 </tr>
               </thead>
               <tbody>
-                {Object.entries(syncStatusGroups).map(([pathString, group], groupIndex) => (
+                {Object.entries(syncStatusGroups).map(([destinationString, pathGroups], destinationIndex) => (
+                  <Fragment key={destinationString}>
+                    <tr className="bg-gray-200 cursor-pointer" onClick={() => toggleDestination(destinationString)}>
+                      <td colSpan={6} className="py-2 px-4 font-medium">
+                        {destinationString} {expandedDestinations[destinationString] ? "🔽" : "🔼"}
+                      </td>
+                    </tr>
+                    {expandedDestinations[destinationString] &&
+                      Object.entries(pathGroups).map(([pathString, group], pathIndex) => (
+                        <Fragment key={pathString}>
+                          <tr
+                            className="bg-gray-100 cursor-pointer"
+                            onClick={() => togglePath(destinationString, pathString)}
+                          >
+                            <td colSpan={6} className="pl-8 py-2 font-medium">
+                              {pathString} ({group.length})
+                              {expandedPaths[destinationString]?.[pathString] ? "🔽" : "🔼"}
+                            </td>
+                          </tr>
+                          {/* {Object.entries(syncStatusGroups).map(([pathString, group], groupIndex) => (
                   <Fragment key={pathString}>
                     <tr className="bg-gray-200 cursor-pointer" onClick={() => togglePath(pathString)}>
                       <td colSpan={6} className="py-2 px-4 font-medium">
                         {pathString} ({group.length}){expandedPaths[pathString] ? "🔽" : "🔼"}
                       </td>
-                    </tr>
-                    {expandedPaths[pathString] &&
-                      group
-                      .map((status: SyncStatus, _index: number) => (
-                        <tr
-                          key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
-                          className="bg-white border-b hover:bg-gray-50"
-                          onClick={() => {
-                            if (status.is_excluded) return;
-                            setSyncStatus((syncStatus) =>
-                              syncStatus.map((s) => (s.id === status.id ? { ...s, checked: !s.checked } : s))
-                            );
-                          }}
-                        >
-                          <td className="w-4 p-4">
-                            <div className="flex items-center">
-                              <input
-                                id={`checkbox-table-${status.id}-${status.entity_type}-${
-                                  status.question.entity_id ?? status.question.id
-                                }`}
-                                type="checkbox"
-                                checked={status.checked}
-                                disabled={status.is_excluded}
-                                onChange={(e) => {
+                    </tr> */}
+                          {expandedPaths[pathString] &&
+                            group.map((status: SyncStatus, _index: number) => (
+                              <tr
+                                key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
+                                className="bg-white border-b hover:bg-gray-50"
+                                onClick={() => {
                                   if (status.is_excluded) return;
-                                  const checked = (e.target as HTMLInputElement).checked;
                                   setSyncStatus((syncStatus) =>
-                                    syncStatus.map((s) => (s.id === status.id ? { ...s, checked } : s))
+                                    syncStatus.map((s) => (s.id === status.id ? { ...s, checked: !s.checked } : s))
                                   );
                                 }}
-                                className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                              />
-                              <label
-                                htmlFor={`checkbox-table-${status.id}-${status.entity_type}-${
-                                  status.question.entity_id ?? status.question.id
-                                }`}
-                                className="sr-only"
                               >
-                                checkbox
-                              </label>
-                            </div>
-                          </td>
-                          <td scope="row" className="py-4 px-2 font-medium text-gray-900">
-                            {formatHostUrl(status.source_server.host)}
-                          </td>
-                          <td scope="row" className="py-4 px-2 font-medium text-gray-900">
-                            {formatHostUrl(status.destination_server.host)}
-                          </td>
-                          <td scope="row" className="py-4 px-2 font-medium text-gray-900">
-                            {status.question.name}{" "}
-                            <p className="text-xs text-gray-500">
-                              ({status.entity_type}) ({status.question.entity_id ?? status.question.id}){" "}
-                              {status.is_dependent && "(dependent)"} {status.is_excluded && "(excluded)"}
-                            </p>
-                          </td>
-                          <td scope="row" className="py-2 px-2 text-gray-800 text-[12px]">
-                            {status.collection_path?.join("/")}
-                          </td>
-                          <td
-                            scope="row"
-                            className={`px-2 py-4 font-medium capitalize ${
-                              status.is_excluded ? "text-orange-500" : getSyncStatusTextColor(status.status)
-                            } whitespace-nowrap`}
-                          >
-                            {status.is_excluded ? "Excluded" : status.status}
-                          </td>
-                        </tr>
+                                <td className="w-4 p-4">
+                                  <div className="flex items-center">
+                                    <input
+                                      id={`checkbox-table-${status.id}-${status.entity_type}-${
+                                        status.question.entity_id ?? status.question.id
+                                      }`}
+                                      type="checkbox"
+                                      checked={status.checked}
+                                      disabled={status.is_excluded}
+                                      onChange={(e) => {
+                                        if (status.is_excluded) return;
+                                        const checked = (e.target as HTMLInputElement).checked;
+                                        setSyncStatus((syncStatus) =>
+                                          syncStatus.map((s) => (s.id === status.id ? { ...s, checked } : s))
+                                        );
+                                      }}
+                                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <label
+                                      htmlFor={`checkbox-table-${status.id}-${status.entity_type}-${
+                                        status.question.entity_id ?? status.question.id
+                                      }`}
+                                      className="sr-only"
+                                    >
+                                      checkbox
+                                    </label>
+                                  </div>
+                                </td>
+                                <td scope="row" className="py-4 px-2 font-medium text-gray-900">
+                                  {formatHostUrl(status.source_server.host)}
+                                </td>
+                                <td scope="row" className="py-4 px-2 font-medium text-gray-900">
+                                  {formatHostUrl(status.destination_server.host)}
+                                </td>
+                                <td scope="row" className="py-4 px-2 font-medium text-gray-900">
+                                  {status.question.name}{" "}
+                                  <p className="text-xs text-gray-500">
+                                    ({status.entity_type}) ({status.question.entity_id ?? status.question.id}){" "}
+                                    {status.is_dependent && "(dependent)"} {status.is_excluded && "(excluded)"}
+                                  </p>
+                                </td>
+                                <td scope="row" className="py-2 px-2 text-gray-800 text-[12px]">
+                                  {status.collection_path?.join("/")}
+                                </td>
+                                <td
+                                  scope="row"
+                                  className={`px-2 py-4 font-medium capitalize ${
+                                    status.is_excluded ? "text-orange-500" : getSyncStatusTextColor(status.status)
+                                  } whitespace-nowrap`}
+                                >
+                                  {status.is_excluded ? "Excluded" : status.status}
+                                </td>
+                              </tr>
+                            ))}
+                        </Fragment>
                       ))}
                   </Fragment>
                 ))}
