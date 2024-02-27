@@ -132,7 +132,14 @@ export default function Home() {
   };
 
   // Use the updated grouping function
-  const syncStatusGroups = groupByDestinationAndPath(syncStatus);
+  // const syncStatusGroups = groupByDestinationAndPath(syncStatus);
+
+  // Sort the sync statuses before grouping
+  const sortedSyncStatus = getSortedSyncStatus();
+
+  // Group the sorted sync statuses by destination and path
+  const syncStatusGroups = groupByDestinationAndPath(sortedSyncStatus);
+
   // END OF ADDED LOGIC
 
   const [settings, setSettings] = useState({
@@ -1212,7 +1219,7 @@ export default function Home() {
                         {pathString} ({group.length}){expandedPaths[pathString] ? "🔽" : "🔼"}
                       </td>
                     </tr> */}
-                          {expandedPaths[pathString] &&
+                          {expandedPaths[destinationString]?.[pathString] &&
                             group.map((status: SyncStatus, _index: number) => (
                               <tr
                                 key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
