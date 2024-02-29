@@ -31,65 +31,52 @@ export default function Home() {
     color: "bg-[#0c80cec5]",
   });
 
-  // Logic for card and path sort
+  // Logic for card and path & status sort
   const [sortField, setSortField] = useState<"name" | "path" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-  const toggleSort = (field: "name" | "path") => {
-    if (sortField === field) {
+  const statusOrder = ["ready", "outdated", "in-sync", "syncing", "success", "error"];
+  const [isSortedByStatus, setIsSortedByStatus] = useState(false);
+
+  const toggleSort = (field: "name" | "path" | "status") => {
+    if (field === "status") {
+      setIsSortedByStatus(!isSortedByStatus);
       setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
-      setSortField(field);
-      setSortDirection("asc"); // Default to ascending when changing sort field
+      if (sortField === field) {
+        setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      } else {
+        setSortField(field);
+        setSortDirection("asc"); // Default to ascending when changing sort field
+      }
     }
   };
 
   const getSortedSyncStatus = () => {
     return [...syncStatus].sort((a, b) => {
-      // Default comparison result
-      let comparisonResult = 0;
-
-      // Determine the field to sort by
+      // Custom status sorting logic
+      if (isSortedByStatus) {
+        const orderA = statusOrder.indexOf(a.status);
+        const orderB = statusOrder.indexOf(b.status);
+        const comparisonResult = sortDirection === "asc" ? orderA - orderB : orderB - orderA;
+        if (comparisonResult !== 0) {
+          return comparisonResult;
+        }
+      }
+      // Existing sorting logic for name and path
       if (sortField === "name") {
-        comparisonResult = a.question.name.localeCompare(b.question.name);
+        return sortDirection === "asc"
+          ? a.question.name.localeCompare(b.question.name)
+          : b.question.name.localeCompare(a.question.name);
       } else if (sortField === "path") {
         const pathA = a.collection_path?.join("/") || "";
         const pathB = b.collection_path?.join("/") || "";
-        comparisonResult = pathA.localeCompare(pathB);
+        return sortDirection === "asc" ? pathA.localeCompare(pathB) : pathB.localeCompare(pathA);
       }
-
-      // If sort direction is descending, reverse the comparison result
-      if (sortDirection === "desc") {
-        comparisonResult *= -1;
-      }
-
-      return comparisonResult;
+      // If no sorting is applied, return 0 to keep original order
+      return 0;
     });
   };
-
-  // add logic for collapsible path sections
-
-  // const groupByPath = (syncStatus) => {
-  //   const grouped = {};
-  //   syncStatus.forEach((status) => {
-  //     const pathString = status.collection_path?.join("/") || "Uncategorized";
-  //     if (!grouped[pathString]) {
-  //       grouped[pathString] = [];
-  //     }
-  //     grouped[pathString].push(status);
-  //   });
-  //   return grouped;
-  // };
-
-  // const [expandedPaths, setExpandedPaths] = useState({});
-
-  // const togglePath = (pathString) => {
-  //   setExpandedPaths((prevExpandedPaths) => ({
-  //     ...prevExpandedPaths,
-  //     [pathString]: !prevExpandedPaths[pathString],
-  //   }));
-  // };
-  // const syncStatusGroups = groupByPath(syncStatus);
 
   // UPDATED LOGIC FOR COLLAPSIBLE DESTINATION AND PATH SECTIONS
   // Update groupByPath to include destination grouping
@@ -1187,8 +1174,19 @@ export default function Home() {
                       {sortField === "path" ? (sortDirection === "asc" ? "🔽" : "🔼") : "⇅"}
                     </button>
                   </th>
-                  <th scope="col" className="py-3 px-2">
-                    Status
+                  <th scope="col" className="py-3 px-2 flex justify-between items-center">
+                    <span>Status</span>
+                    <button onClick={() => toggleSort("status")} className="flex items-center">
+                      {isSortedByStatus ? (
+                        sortDirection === "asc" ? (
+                          <span>🔽</span> // Icon for ascending sort
+                        ) : (
+                          <span>🔼</span> // Icon for descending sort
+                        )
+                      ) : (
+                        <span>⇅</span> // Icon indicating sorting is available but not active
+                      )}
+                    </button>
                   </th>
                 </tr>
               </thead>
@@ -1220,7 +1218,7 @@ export default function Home() {
                       </td>
                     </tr> */}
                           {expandedPaths[destinationString]?.[pathString] &&
-                            group.map((status: SyncStatus, _index: number) => (
+                            getSortedSyncStatus().filter(status => group.includes(status)).map((status: SyncStatus, _index: number) => (
                               <tr
                                 key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
                                 className="bg-white border-b hover:bg-gray-50"
