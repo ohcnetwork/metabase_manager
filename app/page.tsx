@@ -30,6 +30,17 @@ export default function Home() {
     value: 0,
     color: "bg-[#0c80cec5]",
   });
+  // Logic for storing sync history
+
+  const saveSyncRecord = (status: "complete" | "partial" | "failure") => {
+    const syncRecords = JSON.parse(localStorage.getItem("syncRecords") || "[]");
+    const newRecord = {
+      timestamp: new Date().toISOString(),
+      status,
+    };
+    syncRecords.push(newRecord);
+    localStorage.setItem("syncRecords", JSON.stringify(syncRecords));
+  };
 
   // Logic for card and path & status sort
   const [sortField, setSortField] = useState<"name" | "path" | null>(null);
@@ -536,17 +547,124 @@ export default function Home() {
     return lastId;
   }
 
+  // async function syncQuestion(
+  //   sourceServer: Server,
+  //   destinationServer: Server,
+  //   question: Card,
+  //   syncID: string,
+  //   mappedQuesID?: number
+  // ) {
+  //   setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
+  //   try {
+  //     question.dataset_query.database = destinationServer.database;
+
+  //     const question_query = { ...question.dataset_query };
+  //     if (question_query.type != "native") {
+  //       question_query.query = await transformQuery(
+  //         question_query.query,
+  //         sourceServer,
+  //         destinationServer,
+  //         sourceServer.schema,
+  //         destinationServer.schema,
+  //         undefined,
+  //         question.dataset_query.query
+  //       );
+  //     } else {
+  //       const mappedQuery = { ...question_query.native };
+
+  //       for (const key in question_query.native) {
+  //         if (key == "query") continue;
+  //         mappedQuery[key] = await transformQuery(
+  //           mappedQuery[key],
+  //           sourceServer,
+  //           destinationServer,
+  //           sourceServer.schema,
+  //           destinationServer.schema,
+  //           undefined,
+  //           question.dataset_query.native[key]
+  //         );
+  //       }
+
+  //       for (let key in mappedQuery?.["template-tags"]) {
+  //         if (mappedQuery?.["template-tags"].hasOwnProperty(key)) {
+  //           if (
+  //             mappedQuery["template-tags"][key].hasOwnProperty("name") &&
+  //             key !== mappedQuery["template-tags"][key].name
+  //           ) {
+  //             mappedQuery["template-tags"][mappedQuery["template-tags"][key].name] = mappedQuery["template-tags"][key];
+  //             mappedQuery.query = mappedQuery.query.replace(
+  //               new RegExp(`{{${key}}`, "g"),
+  //               `{{${mappedQuery["template-tags"][mappedQuery["template-tags"][key].name].name}}`
+  //             );
+  //             delete mappedQuery["template-tags"][key];
+  //           }
+  //         }
+  //       }
+
+  //       question_query.native = mappedQuery;
+  //     }
+
+  //     const destCollectionID = await toast.promise(
+  //       mirrorCollectionTree(
+  //         sourceServer,
+  //         destinationServer,
+  //         sourceServer.collection,
+  //         destinationServer.collection,
+  //         question.collection_id?.toString()
+  //       ),
+  //       {
+  //         loading: "Syncing collection tree...",
+  //         success: "Collection tree synced!",
+  //         error: (err) => {
+  //           return "Failed to sync collection tree: " + err.message;
+  //         },
+  //       }
+  //     );
+
+  //     const res = await toast.promise(
+  //       createCard(
+  //         sourceServer.host,
+  //         destinationServer.host,
+  //         sourceServer.session_token,
+  //         destinationServer.session_token,
+  //         destinationServer.database,
+  //         { ...question, dataset_query: question_query },
+  //         destCollectionID?.toString(),
+  //         mappedQuesID
+  //       ),
+  //       {
+  //         loading: "Syncing question...",
+  //         success: "Card synced!",
+  //         error: (err) => {
+  //           return "Failed to sync question: " + err.message;
+  //         },
+  //       }
+  //     );
+  //     if (res["error"]) {
+  //       throw new Error(res["error"]);
+  //     }
+  //     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
+  //   } catch (e: any) {
+  //     toast.error(e.message);
+  //     console.error(e);
+  //     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
+  //   }
+  // }
+
   async function syncQuestion(
     sourceServer: Server,
     destinationServer: Server,
     question: Card,
     syncID: string,
     mappedQuesID?: number
-  ) {
-    setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
+  ): Promise<"success" | "error"> {
+    setSyncStatus((syncStatus) =>
+      syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s))
+    );
+  
     try {
       question.dataset_query.database = destinationServer.database;
-
+  
       const question_query = { ...question.dataset_query };
       if (question_query.type != "native") {
         question_query.query = await transformQuery(
@@ -560,7 +678,7 @@ export default function Home() {
         );
       } else {
         const mappedQuery = { ...question_query.native };
-
+  
         for (const key in question_query.native) {
           if (key == "query") continue;
           mappedQuery[key] = await transformQuery(
@@ -573,7 +691,7 @@ export default function Home() {
             question.dataset_query.native[key]
           );
         }
-
+  
         for (let key in mappedQuery?.["template-tags"]) {
           if (mappedQuery?.["template-tags"].hasOwnProperty(key)) {
             if (
@@ -589,10 +707,10 @@ export default function Home() {
             }
           }
         }
-
+  
         question_query.native = mappedQuery;
       }
-
+  
       const destCollectionID = await toast.promise(
         mirrorCollectionTree(
           sourceServer,
@@ -604,12 +722,10 @@ export default function Home() {
         {
           loading: "Syncing collection tree...",
           success: "Collection tree synced!",
-          error: (err) => {
-            return "Failed to sync collection tree: " + err.message;
-          },
+          error: (err) => "Failed to sync collection tree: " + err.message,
         }
       );
-
+  
       const res = await toast.promise(
         createCard(
           sourceServer.host,
@@ -624,19 +740,25 @@ export default function Home() {
         {
           loading: "Syncing question...",
           success: "Card synced!",
-          error: (err) => {
-            return "Failed to sync question: " + err.message;
-          },
+          error: (err) => "Failed to sync question: " + err.message,
         }
       );
+  
       if (res["error"]) {
         throw new Error(res["error"]);
       }
-      setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
+  
+      setSyncStatus((syncStatus) =>
+        syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s))
+      );
+      return "success";
     } catch (e: any) {
       toast.error(e.message);
       console.error(e);
-      setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
+      setSyncStatus((syncStatus) =>
+        syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s))
+      );
+      return "error";
     }
   }
 
@@ -932,50 +1054,127 @@ export default function Home() {
     setSyncLoading(false);
   }
 
+  // async function startSync() {
+  //   setSyncLoading(true);
+  //   setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
+
+  //   let syncSuccessCount = 0; // set counter for synchronization success check
+  //   let syncFailureCount = 0;
+
+  //   const checkedSyncQues = syncStatus
+  //     .filter((s) => s.checked)
+  //     .sort((a, b) => {
+  //       if (a.entity_type === "dashboard" && b.entity_type !== "dashboard") {
+  //         return 1;
+  //       } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
+  //         return -1;
+  //       } else if (a.is_dependent && !b.is_dependent) {
+  //         return 1;
+  //       } else if (!a.is_dependent && b.is_dependent) {
+  //         return -1;
+  //       } else {
+  //         return a.id.localeCompare(b.id);
+  //       }
+  //     });
+  //   for (const syncData of checkedSyncQues) {
+  //     if (syncData.entity_type === "dashboard")
+  //       await syncDashboard(
+  //         syncData.source_server,
+  //         syncData.destination_server,
+  //         syncData.question as Dashboard,
+  //         syncData.id,
+  //         syncData.mapped_ques?.id
+  //       );
+  //     else
+  //       await syncQuestion(
+  //         syncData.source_server,
+  //         syncData.destination_server,
+  //         syncData.question as Card,
+  //         syncData.id,
+  //         syncData.mapped_ques?.id
+  //       );
+  //     // Check if the sync was successful and increment the count
+  //     if (syncData.status === "success") {
+  //       syncSuccessCount++;
+  //     }
+  //   }
+  //   // Determine the overall sync status based on the success count
+  //   let overallSyncStatus: "complete" | "partial" | "failure";
+  //   console.log(checkedSyncQues.length)
+  //   console.log(syncSuccessCount)
+  //   console.log(completedSyncStatus)
+  //   if (syncSuccessCount === checkedSyncQues.length) {
+  //     overallSyncStatus = "complete";
+  //   } else if (syncSuccessCount > 0) {
+  //     overallSyncStatus = "partial";
+  //   } else {
+  //     overallSyncStatus = "failure";
+  //   }
+
+  //   // Save the sync record
+  //   saveSyncRecord(overallSyncStatus);
+
+  //   await toast.promise(loadSyncData(), {
+  //     loading: "Refreshing sync data...",
+  //     success: "Sync data refreshed!",
+  //     error: (err) => {
+  //       setProceedLoading(false);
+  //       return "Failed to refresh sync data: " + err.message;
+  //     },
+  //   });
+  // }
+
   async function startSync() {
-    setSyncLoading(true);
+    setSyncLoading(true); // Start the loading indicator before beginning the sync process
     setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
-    const checkedSyncQues = syncStatus
-      .filter((s) => s.checked)
-      .sort((a, b) => {
-        if (a.entity_type === "dashboard" && b.entity_type !== "dashboard") {
-          return 1;
-        } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
-          return -1;
-        } else if (a.is_dependent && !b.is_dependent) {
-          return 1;
-        } else if (!a.is_dependent && b.is_dependent) {
-          return -1;
-        } else {
-          return a.id.localeCompare(b.id);
-        }
-      });
-    for (const syncData of checkedSyncQues) {
-      if (syncData.entity_type === "dashboard")
-        await syncDashboard(
-          syncData.source_server,
-          syncData.destination_server,
-          syncData.question as Dashboard,
-          syncData.id,
-          syncData.mapped_ques?.id
-        );
-      else
-        await syncQuestion(
-          syncData.source_server,
-          syncData.destination_server,
-          syncData.question as Card,
-          syncData.id,
-          syncData.mapped_ques?.id
-        );
-    }
-    await toast.promise(loadSyncData(), {
-      loading: "Refreshing sync data...",
-      success: "Sync data refreshed!",
-      error: (err) => {
-        setProceedLoading(false);
-        return "Failed to refresh sync data: " + err.message;
-      },
+  
+    let syncSuccessCount = 0; // Set counter for synchronization success check
+    const checkedSyncQues = syncStatus.filter((s) => s.checked); // Filter out the checked questions for syncing
+  
+    // Map over the checked questions and call the sync function for each
+    const syncOperations = checkedSyncQues.map(async (syncData) => {
+      // Perform the sync operation based on the entity type and await its completion
+      const result = syncData.entity_type === "dashboard"
+        ? await syncDashboard(
+            syncData.source_server,
+            syncData.destination_server,
+            syncData.question as Dashboard, // Assuming Dashboard is a valid type
+            syncData.id,
+            syncData.mapped_ques?.id
+          )
+        : await syncQuestion(
+            syncData.source_server,
+            syncData.destination_server,
+            syncData.question as Card, // Assuming Card is a valid type
+            syncData.id,
+            syncData.mapped_ques?.id
+          );
+  
+      // Check the result to determine if the operation was successful
+      if (result === "success") {
+        syncSuccessCount++;
+      }
     });
+  
+    // Wait for all sync operations to complete
+    await Promise.all(syncOperations);
+  
+    // Determine the overall sync status based on the success count
+    let overallSyncStatus: "complete" | "partial" | "failure";
+    if (syncSuccessCount === checkedSyncQues.length) {
+      overallSyncStatus = "complete"; // All sync operations were successful
+    } else if (syncSuccessCount > 0) {
+      overallSyncStatus = "partial"; // Some sync operations were successful
+    } else {
+      overallSyncStatus = "failure"; // No sync operations were successful
+    }
+  
+    // Save the sync record
+    saveSyncRecord(overallSyncStatus); // Assuming saveSyncRecord is a function that saves the sync status
+  
+    // Refresh the sync data and stop the loading indicator
+    await loadSyncData(); // Assuming loadSyncData is a function that refreshes the sync data
+    setSyncLoading(false);
   }
 
   return (
@@ -1218,71 +1417,75 @@ export default function Home() {
                       </td>
                     </tr> */}
                           {expandedPaths[destinationString]?.[pathString] &&
-                            getSortedSyncStatus().filter(status => group.includes(status)).map((status: SyncStatus, _index: number) => (
-                              <tr
-                                key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
-                                className="bg-white border-b hover:bg-gray-50"
-                                onClick={() => {
-                                  if (status.is_excluded) return;
-                                  setSyncStatus((syncStatus) =>
-                                    syncStatus.map((s) => (s.id === status.id ? { ...s, checked: !s.checked } : s))
-                                  );
-                                }}
-                              >
-                                <td className="w-4 p-4">
-                                  <div className="flex items-center">
-                                    <input
-                                      id={`checkbox-table-${status.id}-${status.entity_type}-${
-                                        status.question.entity_id ?? status.question.id
-                                      }`}
-                                      type="checkbox"
-                                      checked={status.checked}
-                                      disabled={status.is_excluded}
-                                      onChange={(e) => {
-                                        if (status.is_excluded) return;
-                                        const checked = (e.target as HTMLInputElement).checked;
-                                        setSyncStatus((syncStatus) =>
-                                          syncStatus.map((s) => (s.id === status.id ? { ...s, checked } : s))
-                                        );
-                                      }}
-                                      className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                    />
-                                    <label
-                                      htmlFor={`checkbox-table-${status.id}-${status.entity_type}-${
-                                        status.question.entity_id ?? status.question.id
-                                      }`}
-                                      className="sr-only"
-                                    >
-                                      checkbox
-                                    </label>
-                                  </div>
-                                </td>
-                                <td scope="row" className="py-4 px-2 font-medium text-gray-900">
-                                  {formatHostUrl(status.source_server.host)}
-                                </td>
-                                <td scope="row" className="py-4 px-2 font-medium text-gray-900">
-                                  {formatHostUrl(status.destination_server.host)}
-                                </td>
-                                <td scope="row" className="py-4 px-2 font-medium text-gray-900">
-                                  {status.question.name}{" "}
-                                  <p className="text-xs text-gray-500">
-                                    ({status.entity_type}) ({status.question.entity_id ?? status.question.id}){" "}
-                                    {status.is_dependent && "(dependent)"} {status.is_excluded && "(excluded)"}
-                                  </p>
-                                </td>
-                                <td scope="row" className="py-2 px-2 text-gray-800 text-[12px]">
-                                  {status.collection_path?.join("/")}
-                                </td>
-                                <td
-                                  scope="row"
-                                  className={`px-2 py-4 font-medium capitalize ${
-                                    status.is_excluded ? "text-orange-500" : getSyncStatusTextColor(status.status)
-                                  } whitespace-nowrap`}
+                            getSortedSyncStatus()
+                              .filter((status) => group.includes(status))
+                              .map((status: SyncStatus, _index: number) => (
+                                <tr
+                                  key={
+                                    status.id + status.entity_type + (status.question.entity_id ?? status.question.id)
+                                  }
+                                  className="bg-white border-b hover:bg-gray-50"
+                                  onClick={() => {
+                                    if (status.is_excluded) return;
+                                    setSyncStatus((syncStatus) =>
+                                      syncStatus.map((s) => (s.id === status.id ? { ...s, checked: !s.checked } : s))
+                                    );
+                                  }}
                                 >
-                                  {status.is_excluded ? "Excluded" : status.status}
-                                </td>
-                              </tr>
-                            ))}
+                                  <td className="w-4 p-4">
+                                    <div className="flex items-center">
+                                      <input
+                                        id={`checkbox-table-${status.id}-${status.entity_type}-${
+                                          status.question.entity_id ?? status.question.id
+                                        }`}
+                                        type="checkbox"
+                                        checked={status.checked}
+                                        disabled={status.is_excluded}
+                                        onChange={(e) => {
+                                          if (status.is_excluded) return;
+                                          const checked = (e.target as HTMLInputElement).checked;
+                                          setSyncStatus((syncStatus) =>
+                                            syncStatus.map((s) => (s.id === status.id ? { ...s, checked } : s))
+                                          );
+                                        }}
+                                        className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                                      />
+                                      <label
+                                        htmlFor={`checkbox-table-${status.id}-${status.entity_type}-${
+                                          status.question.entity_id ?? status.question.id
+                                        }`}
+                                        className="sr-only"
+                                      >
+                                        checkbox
+                                      </label>
+                                    </div>
+                                  </td>
+                                  <td scope="row" className="py-4 px-2 font-medium text-gray-900">
+                                    {formatHostUrl(status.source_server.host)}
+                                  </td>
+                                  <td scope="row" className="py-4 px-2 font-medium text-gray-900">
+                                    {formatHostUrl(status.destination_server.host)}
+                                  </td>
+                                  <td scope="row" className="py-4 px-2 font-medium text-gray-900">
+                                    {status.question.name}{" "}
+                                    <p className="text-xs text-gray-500">
+                                      ({status.entity_type}) ({status.question.entity_id ?? status.question.id}){" "}
+                                      {status.is_dependent && "(dependent)"} {status.is_excluded && "(excluded)"}
+                                    </p>
+                                  </td>
+                                  <td scope="row" className="py-2 px-2 text-gray-800 text-[12px]">
+                                    {status.collection_path?.join("/")}
+                                  </td>
+                                  <td
+                                    scope="row"
+                                    className={`px-2 py-4 font-medium capitalize ${
+                                      status.is_excluded ? "text-orange-500" : getSyncStatusTextColor(status.status)
+                                    } whitespace-nowrap`}
+                                  >
+                                    {status.is_excluded ? "Excluded" : status.status}
+                                  </td>
+                                </tr>
+                              ))}
                         </Fragment>
                       ))}
                   </Fragment>
