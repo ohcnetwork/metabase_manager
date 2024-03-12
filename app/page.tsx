@@ -35,14 +35,22 @@ export default function Home() {
   const [sortField, setSortField] = useState<"name" | "path" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
-  const statusOrder = ["ready", "outdated", "in-sync", "syncing", "success", "error"];
+  const statusOrder = ["ready", "outdated", "in-sync", "excluded", "syncing", "success", "error"];
   const [isSortedByStatus, setIsSortedByStatus] = useState(false);
+
+  // UPDATED TOGGLESORT FUNCTION TO ADDRESS STATUS SORTING ISSUE
 
   const toggleSort = (field: "name" | "path" | "status") => {
     if (field === "status") {
-      setIsSortedByStatus(!isSortedByStatus);
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      if (sortField !== "status") {
+        setSortField("status");
+        setSortDirection("asc");
+      } else {
+        setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      }
+      setIsSortedByStatus(true);
     } else {
+      setIsSortedByStatus(false);
       if (sortField === field) {
         setSortDirection(sortDirection === "asc" ? "desc" : "asc");
       } else {
@@ -51,6 +59,35 @@ export default function Home() {
       }
     }
   };
+
+  // ADDED TOGGLE FUNCTION FOR EXPAND/COLLAPSE ALL
+  const [expandAll, setExpandAll] = useState(false);
+
+  const toggleExpandAll = () => {
+    const newExpandAll = !expandAll;
+    setExpandAll(newExpandAll);
+  
+    if (newExpandAll) {
+      // If expanding all, set every destination and path to true.
+      const newExpandedDestinations = {};
+      const newExpandedPaths = {};
+      syncStatus.forEach((status) => {
+        const destinationString = formatHostUrl(status.destination_server.host);
+        newExpandedDestinations[destinationString] = true;
+        if (!newExpandedPaths[destinationString]) {
+          newExpandedPaths[destinationString] = {};
+        }
+        const pathString = status.collection_path?.join("/") || "Uncategorized";
+        newExpandedPaths[destinationString][pathString] = true;
+      });
+      setExpandedDestinations(newExpandedDestinations);
+      setExpandedPaths(newExpandedPaths);
+    } else {
+      // If collapsing all, reset expanded states to empty objects.
+      setExpandedDestinations({});
+      setExpandedPaths({});
+    }
+  }
 
   const getSortedSyncStatus = () => {
     return [...syncStatus].sort((a, b) => {
@@ -101,21 +138,50 @@ export default function Home() {
   const [expandedPaths, setExpandedPaths] = useState({});
 
   // Add toggle functions for destinations and paths
-  const toggleDestination = (destinationString) => {
-    setExpandedDestinations((prevExpandedDestinations) => ({
-      ...prevExpandedDestinations,
-      [destinationString]: !prevExpandedDestinations[destinationString],
-    }));
-  };
+// This function toggles the expand/collapse state of a specific destination.
+const toggleDestination = (destinationString) => {
+  setExpandedDestinations((prev) => {
+    const isCurrentlyExpanded = !!prev[destinationString];
+    // Toggle the destination's state.
+    const newExpandedDestinations = { ...prev, [destinationString]: !isCurrentlyExpanded };
+
+    // Collapse all subgroups if the destination is being collapsed.
+    if (!isCurrentlyExpanded) {
+      setExpandedPaths((prevPaths) => {
+        const newPaths = { ...prevPaths };
+        if (newPaths[destinationString]) {
+          Object.keys(newPaths[destinationString]).forEach((path) => {
+            newPaths[destinationString][path] = false;
+          });
+        }
+        return newPaths;
+      });
+    }
+
+    return newExpandedDestinations;
+  });
+};
 
   const togglePath = (destinationString, pathString) => {
-    setExpandedPaths((prevExpandedPaths) => ({
-      ...prevExpandedPaths,
-      [destinationString]: {
-        ...prevExpandedPaths[destinationString],
-        [pathString]: !prevExpandedPaths[destinationString]?.[pathString],
-      },
-    }));
+    setExpandedPaths((prev) => {
+      // If the destination entry doesn't exist, create it.
+      if (!prev[destinationString]) {
+        prev[destinationString] = {};
+      }
+      
+      // Toggle the path's state.
+      const isCurrentlyExpanded = !!prev[destinationString][pathString];
+      return {
+        ...prev,
+        [destinationString]: {
+          ...prev[destinationString],
+          [pathString]: !isCurrentlyExpanded,
+        },
+      };
+    });
+  
+    // If a subgroup is toggled, we should no longer consider the "Expand All" state.
+    setExpandAll(false);
   };
 
   // Use the updated grouping function
@@ -1134,6 +1200,16 @@ export default function Home() {
             <table className="w-full text-sm text-left text-gray-500">
               <thead className="text-xs text-gray-700 uppercase bg-gray-50">
                 <tr>
+                  <th>
+                    <button
+                      onClick={toggleExpandAll}
+                      className="rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
+                    >
+                      {expandAll ? "Collapse All" : "Expand All"}
+                    </button>
+                  </th>
+                </tr>
+                <tr>
                   <th scope="col" className="p-4 ">
                     <div className="flex items-center">
                       <input
@@ -1195,30 +1271,47 @@ export default function Home() {
                   <Fragment key={destinationString}>
                     <tr className="bg-gray-200 cursor-pointer" onClick={() => toggleDestination(destinationString)}>
                       <td colSpan={6} className="py-2 px-4 font-medium">
-                        {destinationString} {expandedDestinations[destinationString] ? "🔽" : "🔼"}
+                        {destinationString}{" "}
+                        {expandedDestinations[destinationString] ||
+                        (expandAll && expandedDestinations[destinationString] === undefined)
+                          ? "🔼"
+                          : "🔽"}
                       </td>
                     </tr>
-                    {expandedDestinations[destinationString] &&
+                    {(expandedDestinations[destinationString] ||
+                      (expandAll && expandedDestinations[destinationString] === undefined)) &&
                       Object.entries(pathGroups).map(([pathString, group], pathIndex) => (
                         <Fragment key={pathString}>
                           <tr
                             className="bg-gray-100 cursor-pointer"
                             onClick={() => togglePath(destinationString, pathString)}
                           >
-                            <td colSpan={6} className="pl-8 py-2 font-medium">
-                              {pathString} ({group.length})
-                              {expandedPaths[destinationString]?.[pathString] ? "🔽" : "🔼"}
+                            <td className="pl-4 py-2">
+                              <input
+                                type="checkbox"
+                                checked={group.every((status) => status.checked)}
+                                onChange={(e) => {
+                                  e.stopPropagation(); // Prevent the path toggle when clicking the checkbox
+                                  const checked = e.target.checked;
+                                  setSyncStatus((currentSyncStatus) =>
+                                    currentSyncStatus.map((status) =>
+                                      group.includes(status) ? { ...status, checked } : status
+                                    )
+                                  );
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </td>
+                            <td colSpan={5} className="py-2 font-medium">
+                              <span onClick={(e) => e.stopPropagation()}>
+                                {pathString} ({group.length})
+                                {expandedPaths[destinationString]?.[pathString] || expandAll ? "🔼" : "🔽"}
+                              </span>
                             </td>
                           </tr>
-                          {/* {Object.entries(syncStatusGroups).map(([pathString, group], groupIndex) => (
-                  <Fragment key={pathString}>
-                    <tr className="bg-gray-200 cursor-pointer" onClick={() => togglePath(pathString)}>
-                      <td colSpan={6} className="py-2 px-4 font-medium">
-                        {pathString} ({group.length}){expandedPaths[pathString] ? "🔽" : "🔼"}
-                      </td>
-                    </tr> */}
-                          {expandedPaths[destinationString]?.[pathString] &&
-                            getSortedSyncStatus().filter(status => group.includes(status)).map((status: SyncStatus, _index: number) => (
+                          {(expandedPaths[destinationString]?.[pathString] ||
+                            (expandAll && expandedPaths[destinationString]?.[pathString] === undefined)) &&
+                            group.map((status: SyncStatus, _index: number) => (
                               <tr
                                 key={status.id + status.entity_type + (status.question.entity_id ?? status.question.id)}
                                 className="bg-white border-b hover:bg-gray-50"
