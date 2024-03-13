@@ -31,12 +31,21 @@ export default function Home() {
     color: "bg-[#0c80cec5]",
   });
   // Logic for storing sync history
-
-  const saveSyncRecord = (status: "complete" | "partial" | "failure") => {
+  const saveSyncRecord = (
+    status: "complete" | "partial" | "failure",
+    detailedRecords: any[],
+    sourceEmail: string,
+    sourceHost: string,
+    destinationHost: string
+  ) => {
     const syncRecords = JSON.parse(localStorage.getItem("syncRecords") || "[]");
     const newRecord = {
       timestamp: new Date().toISOString(),
       status,
+      detailedRecords,
+      sourceEmail,
+      sourceHost,
+      destinationHost,
     };
     syncRecords.push(newRecord);
     localStorage.setItem("syncRecords", JSON.stringify(syncRecords));
@@ -77,7 +86,7 @@ export default function Home() {
   const toggleExpandAll = () => {
     const newExpandAll = !expandAll;
     setExpandAll(newExpandAll);
-  
+
     if (newExpandAll) {
       // If expanding all, set every destination and path to true.
       const newExpandedDestinations = {};
@@ -98,7 +107,7 @@ export default function Home() {
       setExpandedDestinations({});
       setExpandedPaths({});
     }
-  }
+  };
 
   const getSortedSyncStatus = () => {
     return [...syncStatus].sort((a, b) => {
@@ -149,29 +158,29 @@ export default function Home() {
   const [expandedPaths, setExpandedPaths] = useState({});
 
   // Add toggle functions for destinations and paths
-// This function toggles the expand/collapse state of a specific destination.
-const toggleDestination = (destinationString) => {
-  setExpandedDestinations((prev) => {
-    const isCurrentlyExpanded = !!prev[destinationString];
-    // Toggle the destination's state.
-    const newExpandedDestinations = { ...prev, [destinationString]: !isCurrentlyExpanded };
+  // This function toggles the expand/collapse state of a specific destination.
+  const toggleDestination = (destinationString) => {
+    setExpandedDestinations((prev) => {
+      const isCurrentlyExpanded = !!prev[destinationString];
+      // Toggle the destination's state.
+      const newExpandedDestinations = { ...prev, [destinationString]: !isCurrentlyExpanded };
 
-    // Collapse all subgroups if the destination is being collapsed.
-    if (!isCurrentlyExpanded) {
-      setExpandedPaths((prevPaths) => {
-        const newPaths = { ...prevPaths };
-        if (newPaths[destinationString]) {
-          Object.keys(newPaths[destinationString]).forEach((path) => {
-            newPaths[destinationString][path] = false;
-          });
-        }
-        return newPaths;
-      });
-    }
+      // Collapse all subgroups if the destination is being collapsed.
+      if (!isCurrentlyExpanded) {
+        setExpandedPaths((prevPaths) => {
+          const newPaths = { ...prevPaths };
+          if (newPaths[destinationString]) {
+            Object.keys(newPaths[destinationString]).forEach((path) => {
+              newPaths[destinationString][path] = false;
+            });
+          }
+          return newPaths;
+        });
+      }
 
-    return newExpandedDestinations;
-  });
-};
+      return newExpandedDestinations;
+    });
+  };
 
   const togglePath = (destinationString, pathString) => {
     setExpandedPaths((prev) => {
@@ -179,7 +188,7 @@ const toggleDestination = (destinationString) => {
       if (!prev[destinationString]) {
         prev[destinationString] = {};
       }
-      
+
       // Toggle the path's state.
       const isCurrentlyExpanded = !!prev[destinationString][pathString];
       return {
@@ -190,7 +199,7 @@ const toggleDestination = (destinationString) => {
         },
       };
     });
-  
+
     // If a subgroup is toggled, we should no longer consider the "Expand All" state.
     setExpandAll(false);
   };
@@ -222,14 +231,71 @@ const toggleDestination = (destinationString) => {
     }));
   }, [syncStatus]);
 
+  // async function syncDashboard(
+  //   sourceServer: Server,
+  //   destinationServer: Server,
+  //   dashboard: Dashboard,
+  //   syncID: string,
+  //   mappedDashID?: number
+  // ) {
+  //   setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
+  //   try {
+  //     const destCollectionID = await toast.promise(
+  //       mirrorCollectionTree(
+  //         sourceServer,
+  //         destinationServer,
+  //         sourceServer.collection,
+  //         destinationServer.collection,
+  //         dashboard.collection_id?.toString()
+  //       ),
+  //       {
+  //         loading: "Syncing collection tree...",
+  //         success: "Collection tree synced!",
+  //         error: (err) => {
+  //           return "Failed to sync collection tree: " + err.message;
+  //         },
+  //       }
+  //     );
+
+  //     const res = await toast.promise(
+  //       createDashboard(
+  //         sourceServer.host,
+  //         destinationServer.host,
+  //         sourceServer.session_token,
+  //         destinationServer.session_token,
+  //         destinationServer.database,
+  //         dashboard,
+  //         destCollectionID.toString(),
+  //         mappedDashID,
+  //         settings.syncMarkdown,
+  //         settings.excludeRegex
+  //       ),
+  //       {
+  //         loading: "Syncing dashboard...",
+  //         success: "Dashboard synced!",
+  //         error: (err) => {
+  //           return "Failed to sync dashboard: " + err.message;
+  //         },
+  //       }
+  //     );
+  //     if (res["error"]) {
+  //       throw new Error(res["error"]);
+  //     }
+  //     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
+  //   } catch (e: any) {
+  //     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
+  //   }
+  // }
+
   async function syncDashboard(
     sourceServer: Server,
     destinationServer: Server,
     dashboard: Dashboard,
     syncID: string,
     mappedDashID?: number
-  ) {
+  ): Promise<{ status: "success" | "error"; error?: string }> {
     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
+  
     try {
       const destCollectionID = await toast.promise(
         mirrorCollectionTree(
@@ -242,12 +308,10 @@ const toggleDestination = (destinationString) => {
         {
           loading: "Syncing collection tree...",
           success: "Collection tree synced!",
-          error: (err) => {
-            return "Failed to sync collection tree: " + err.message;
-          },
+          error: (err) => "Failed to sync collection tree: " + err.message,
         }
       );
-
+  
       const res = await toast.promise(
         createDashboard(
           sourceServer.host,
@@ -264,17 +328,19 @@ const toggleDestination = (destinationString) => {
         {
           loading: "Syncing dashboard...",
           success: "Dashboard synced!",
-          error: (err) => {
-            return "Failed to sync dashboard: " + err.message;
-          },
+          error: (err) => "Failed to sync dashboard: " + err.message,
         }
       );
+  
       if (res["error"]) {
         throw new Error(res["error"]);
       }
+  
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
+      return { status: "success" };
     } catch (e: any) {
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
+      return { status: "error", error: e.message };
     }
   }
 
@@ -619,8 +685,11 @@ const toggleDestination = (destinationString) => {
   //   question: Card,
   //   syncID: string,
   //   mappedQuesID?: number
-  // ) {
-  //   setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
+  // ): Promise<"success" | "error"> {
+  //   setSyncStatus((syncStatus) =>
+  //     syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s))
+  //   );
+
   //   try {
   //     question.dataset_query.database = destinationServer.database;
 
@@ -681,9 +750,7 @@ const toggleDestination = (destinationString) => {
   //       {
   //         loading: "Syncing collection tree...",
   //         success: "Collection tree synced!",
-  //         error: (err) => {
-  //           return "Failed to sync collection tree: " + err.message;
-  //         },
+  //         error: (err) => "Failed to sync collection tree: " + err.message,
   //       }
   //     );
 
@@ -701,19 +768,25 @@ const toggleDestination = (destinationString) => {
   //       {
   //         loading: "Syncing question...",
   //         success: "Card synced!",
-  //         error: (err) => {
-  //           return "Failed to sync question: " + err.message;
-  //         },
+  //         error: (err) => "Failed to sync question: " + err.message,
   //       }
   //     );
+
   //     if (res["error"]) {
   //       throw new Error(res["error"]);
   //     }
-  //     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
+
+  //     setSyncStatus((syncStatus) =>
+  //       syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s))
+  //     );
+  //     return "success";
   //   } catch (e: any) {
   //     toast.error(e.message);
   //     console.error(e);
-  //     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
+  //     setSyncStatus((syncStatus) =>
+  //       syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s))
+  //     );
+  //     return "error";
   //   }
   // }
 
@@ -723,14 +796,12 @@ const toggleDestination = (destinationString) => {
     question: Card,
     syncID: string,
     mappedQuesID?: number
-  ): Promise<"success" | "error"> {
-    setSyncStatus((syncStatus) =>
-      syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s))
-    );
-  
+  ): Promise<{ status: "success" | "error"; error?: string }> {
+    setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
+
     try {
       question.dataset_query.database = destinationServer.database;
-  
+
       const question_query = { ...question.dataset_query };
       if (question_query.type != "native") {
         question_query.query = await transformQuery(
@@ -744,7 +815,7 @@ const toggleDestination = (destinationString) => {
         );
       } else {
         const mappedQuery = { ...question_query.native };
-  
+
         for (const key in question_query.native) {
           if (key == "query") continue;
           mappedQuery[key] = await transformQuery(
@@ -757,7 +828,7 @@ const toggleDestination = (destinationString) => {
             question.dataset_query.native[key]
           );
         }
-  
+
         for (let key in mappedQuery?.["template-tags"]) {
           if (mappedQuery?.["template-tags"].hasOwnProperty(key)) {
             if (
@@ -773,10 +844,10 @@ const toggleDestination = (destinationString) => {
             }
           }
         }
-  
+
         question_query.native = mappedQuery;
       }
-  
+
       const destCollectionID = await toast.promise(
         mirrorCollectionTree(
           sourceServer,
@@ -791,7 +862,7 @@ const toggleDestination = (destinationString) => {
           error: (err) => "Failed to sync collection tree: " + err.message,
         }
       );
-  
+
       const res = await toast.promise(
         createCard(
           sourceServer.host,
@@ -809,24 +880,21 @@ const toggleDestination = (destinationString) => {
           error: (err) => "Failed to sync question: " + err.message,
         }
       );
-  
+
       if (res["error"]) {
         throw new Error(res["error"]);
       }
-  
-      setSyncStatus((syncStatus) =>
-        syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s))
-      );
-      return "success";
+
+      setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
+      return { status: "success" };
     } catch (e: any) {
       toast.error(e.message);
       console.error(e);
-      setSyncStatus((syncStatus) =>
-        syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s))
-      );
-      return "error";
+      setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
+      return { status: "error", error: e.message };
     }
   }
+
 
   function getSyncStatusTextColor(status: SyncStatusText): string | undefined {
     switch (status) {
@@ -1120,128 +1188,65 @@ const toggleDestination = (destinationString) => {
     setSyncLoading(false);
   }
 
-  // async function startSync() {
-  //   setSyncLoading(true);
-  //   setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
-
-  //   let syncSuccessCount = 0; // set counter for synchronization success check
-  //   let syncFailureCount = 0;
-
-  //   const checkedSyncQues = syncStatus
-  //     .filter((s) => s.checked)
-  //     .sort((a, b) => {
-  //       if (a.entity_type === "dashboard" && b.entity_type !== "dashboard") {
-  //         return 1;
-  //       } else if (a.entity_type !== "dashboard" && b.entity_type === "dashboard") {
-  //         return -1;
-  //       } else if (a.is_dependent && !b.is_dependent) {
-  //         return 1;
-  //       } else if (!a.is_dependent && b.is_dependent) {
-  //         return -1;
-  //       } else {
-  //         return a.id.localeCompare(b.id);
-  //       }
-  //     });
-  //   for (const syncData of checkedSyncQues) {
-  //     if (syncData.entity_type === "dashboard")
-  //       await syncDashboard(
-  //         syncData.source_server,
-  //         syncData.destination_server,
-  //         syncData.question as Dashboard,
-  //         syncData.id,
-  //         syncData.mapped_ques?.id
-  //       );
-  //     else
-  //       await syncQuestion(
-  //         syncData.source_server,
-  //         syncData.destination_server,
-  //         syncData.question as Card,
-  //         syncData.id,
-  //         syncData.mapped_ques?.id
-  //       );
-  //     // Check if the sync was successful and increment the count
-  //     if (syncData.status === "success") {
-  //       syncSuccessCount++;
-  //     }
-  //   }
-  //   // Determine the overall sync status based on the success count
-  //   let overallSyncStatus: "complete" | "partial" | "failure";
-  //   console.log(checkedSyncQues.length)
-  //   console.log(syncSuccessCount)
-  //   console.log(completedSyncStatus)
-  //   if (syncSuccessCount === checkedSyncQues.length) {
-  //     overallSyncStatus = "complete";
-  //   } else if (syncSuccessCount > 0) {
-  //     overallSyncStatus = "partial";
-  //   } else {
-  //     overallSyncStatus = "failure";
-  //   }
-
-  //   // Save the sync record
-  //   saveSyncRecord(overallSyncStatus);
-
-  //   await toast.promise(loadSyncData(), {
-  //     loading: "Refreshing sync data...",
-  //     success: "Sync data refreshed!",
-  //     error: (err) => {
-  //       setProceedLoading(false);
-  //       return "Failed to refresh sync data: " + err.message;
-  //     },
-  //   });
-  // }
-
   async function startSync() {
-    setSyncLoading(true); // Start the loading indicator before beginning the sync process
+    setSyncLoading(true);
     setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
   
-    let syncSuccessCount = 0; // Set counter for synchronization success check
-    const checkedSyncQues = syncStatus.filter((s) => s.checked); // Filter out the checked questions for syncing
+    // Extract the email and host from the first source and destination servers
+    // You might want to adjust this if you have multiple servers or other requirements
+    const sourceEmail = sourceServers.length > 0 ? sourceServers[0].email : "";
+    const sourceHost = sourceServers.length > 0 ? sourceServers[0].host : "";
+    const destinationHost = destinationServers.length > 0 ? destinationServers[0].host : "";
   
-    // Map over the checked questions and call the sync function for each
-    const syncOperations = checkedSyncQues.map(async (syncData) => {
-      // Perform the sync operation based on the entity type and await its completion
-      const result = syncData.entity_type === "dashboard"
-        ? await syncDashboard(
-            syncData.source_server,
-            syncData.destination_server,
-            syncData.question as Dashboard, // Assuming Dashboard is a valid type
-            syncData.id,
-            syncData.mapped_ques?.id
-          )
-        : await syncQuestion(
-            syncData.source_server,
-            syncData.destination_server,
-            syncData.question as Card, // Assuming Card is a valid type
-            syncData.id,
-            syncData.mapped_ques?.id
-          );
+    const detailedSyncRecords = []; // Array to store detailed sync results
   
-      // Check the result to determine if the operation was successful
-      if (result === "success") {
-        syncSuccessCount++;
+    const checkedSyncQues = syncStatus.filter((s) => s.checked);
+    for (const syncData of checkedSyncQues) {
+      let result;
+      if (syncData.entity_type === "dashboard") {
+        result = await syncDashboard(
+          syncData.source_server,
+          syncData.destination_server,
+          syncData.question as Dashboard,
+          syncData.id,
+          syncData.mapped_ques?.id
+        );
+      } else {
+        result = await syncQuestion(
+          syncData.source_server,
+          syncData.destination_server,
+          syncData.question as Card,
+          syncData.id,
+          syncData.mapped_ques?.id
+        );
       }
-    });
   
-    // Wait for all sync operations to complete
-    await Promise.all(syncOperations);
-  
-    // Determine the overall sync status based on the success count
-    let overallSyncStatus: "complete" | "partial" | "failure";
-    if (syncSuccessCount === checkedSyncQues.length) {
-      overallSyncStatus = "complete"; // All sync operations were successful
-    } else if (syncSuccessCount > 0) {
-      overallSyncStatus = "partial"; // Some sync operations were successful
-    } else {
-      overallSyncStatus = "failure"; // No sync operations were successful
+      // Store the detailed result for each card, including the name
+      detailedSyncRecords.push({
+        cardId: syncData.question.entity_id ?? syncData.question.id,
+        cardName: syncData.question.name,
+        status: result.status,
+        error: result.error,
+      });
     }
   
-    // Save the sync record
-    saveSyncRecord(overallSyncStatus); // Assuming saveSyncRecord is a function that saves the sync status
+    // Determine the overall sync status based on the detailed sync records
+    let overallSyncStatus: "complete" | "partial" | "failure";
+    if (detailedSyncRecords.every((record) => record.status === "success")) {
+      overallSyncStatus = "complete";
+    } else if (detailedSyncRecords.some((record) => record.status === "error")) {
+      overallSyncStatus = "partial";
+    } else {
+      overallSyncStatus = "failure";
+    }
   
-    // Refresh the sync data and stop the loading indicator
-    await loadSyncData(); // Assuming loadSyncData is a function that refreshes the sync data
+    // Pass the detailed sync records along with the credentials and host details to the saveSyncRecord function
+    saveSyncRecord(overallSyncStatus, detailedSyncRecords, sourceEmail, sourceHost, destinationHost);
+  
+    await loadSyncData();
     setSyncLoading(false);
   }
+
 
   return (
     <div className="bg-white py-6">
