@@ -16,6 +16,8 @@ import {
   dashboardList,
   collectionList,
   clearAllMapping,
+  createSyncLog,
+  updateSyncLog,
 } from "./api";
 
 import React, { Fragment } from "react"; // needed for collapsible
@@ -30,26 +32,26 @@ export default function Home() {
     value: 0,
     color: "bg-[#0c80cec5]",
   });
-  // Logic for storing sync history
-  const saveSyncRecord = (
-    status: "complete" | "partial" | "failure",
-    detailedRecords: any[],
-    sourceEmail: string,
-    sourceHost: string,
-    destinationHost: string
-  ) => {
-    const syncRecords = JSON.parse(localStorage.getItem("syncRecords") || "[]");
-    const newRecord = {
-      timestamp: new Date().toISOString(),
-      status,
-      detailedRecords,
-      sourceEmail,
-      sourceHost,
-      destinationHost,
-    };
-    syncRecords.push(newRecord);
-    localStorage.setItem("syncRecords", JSON.stringify(syncRecords));
-  };
+  // Logic for storing sync history - UPDATE: removed since startSync is now interacting with api calls.
+  // const saveSyncRecord = (
+  //   status: "complete" | "partial" | "failure",
+  //   detailedRecords: any[],
+  //   sourceEmail: string,
+  //   sourceHost: string,
+  //   destinationHost: string
+  // ) => {
+  //   const syncRecords = JSON.parse(localStorage.getItem("syncRecords") || "[]");
+  //   const newRecord = {
+  //     timestamp: new Date().toISOString(),
+  //     status,
+  //     detailedRecords,
+  //     sourceEmail,
+  //     sourceHost,
+  //     destinationHost,
+  //   };
+  //   syncRecords.push(newRecord);
+  //   localStorage.setItem("syncRecords", JSON.stringify(syncRecords));
+  // };
 
   // Logic for card and path & status sort
   const [sortField, setSortField] = useState<"name" | "path" | null>(null);
@@ -295,7 +297,7 @@ export default function Home() {
     mappedDashID?: number
   ): Promise<{ status: "success" | "error"; error?: string }> {
     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
-  
+
     try {
       const destCollectionID = await toast.promise(
         mirrorCollectionTree(
@@ -311,7 +313,7 @@ export default function Home() {
           error: (err) => "Failed to sync collection tree: " + err.message,
         }
       );
-  
+
       const res = await toast.promise(
         createDashboard(
           sourceServer.host,
@@ -331,11 +333,11 @@ export default function Home() {
           error: (err) => "Failed to sync dashboard: " + err.message,
         }
       );
-  
+
       if (res["error"]) {
         throw new Error(res["error"]);
       }
-  
+
       setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
       return { status: "success" };
     } catch (e: any) {
@@ -895,7 +897,6 @@ export default function Home() {
     }
   }
 
-
   function getSyncStatusTextColor(status: SyncStatusText): string | undefined {
     switch (status) {
       case "in-sync":
@@ -1188,18 +1189,88 @@ export default function Home() {
     setSyncLoading(false);
   }
 
+  // async function startSync() {
+  //   setSyncLoading(true);
+  //   setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
+
+  //   // Extract the email and host from the first source and destination servers
+  //   // You might want to adjust this if you have multiple servers or other requirements
+  //   const sourceEmail = sourceServers.length > 0 ? sourceServers[0].email : "";
+  //   const sourceHost = sourceServers.length > 0 ? sourceServers[0].host : "";
+  //   const destinationHost = destinationServers.length > 0 ? destinationServers[0].host : "";
+
+  //   const detailedSyncRecords = []; // Array to store detailed sync results
+
+  //   const checkedSyncQues = syncStatus.filter((s) => s.checked);
+  //   for (const syncData of checkedSyncQues) {
+  //     let result;
+  //     if (syncData.entity_type === "dashboard") {
+  //       result = await syncDashboard(
+  //         syncData.source_server,
+  //         syncData.destination_server,
+  //         syncData.question as Dashboard,
+  //         syncData.id,
+  //         syncData.mapped_ques?.id
+  //       );
+  //     } else {
+  //       result = await syncQuestion(
+  //         syncData.source_server,
+  //         syncData.destination_server,
+  //         syncData.question as Card,
+  //         syncData.id,
+  //         syncData.mapped_ques?.id
+  //       );
+  //     }
+
+  //     // Store the detailed result for each card, including the name
+  //     detailedSyncRecords.push({
+  //       cardId: syncData.question.entity_id ?? syncData.question.id,
+  //       cardName: syncData.question.name,
+  //       status: result.status,
+  //       error: result.error,
+  //     });
+  //   }
+
+  //   // Determine the overall sync status based on the detailed sync records
+  //   let overallSyncStatus: "complete" | "partial" | "failure";
+  //   if (detailedSyncRecords.every((record) => record.status === "success")) {
+  //     overallSyncStatus = "complete";
+  //   } else if (detailedSyncRecords.some((record) => record.status === "error")) {
+  //     overallSyncStatus = "partial";
+  //   } else {
+  //     overallSyncStatus = "failure";
+  //   }
+
+  //   // Pass the detailed sync records along with the credentials and host details to the saveSyncRecord function
+  //   saveSyncRecord(overallSyncStatus, detailedSyncRecords, sourceEmail, sourceHost, destinationHost);
+
+  //   await loadSyncData();
+  //   setSyncLoading(false);
+  // }
+
   async function startSync() {
     setSyncLoading(true);
     setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
-  
+
     // Extract the email and host from the first source and destination servers
-    // You might want to adjust this if you have multiple servers or other requirements
     const sourceEmail = sourceServers.length > 0 ? sourceServers[0].email : "";
     const sourceHost = sourceServers.length > 0 ? sourceServers[0].host : "";
     const destinationHost = destinationServers.length > 0 ? destinationServers[0].host : "";
-  
+
+    // Create the initial sync log entry in the database
+    const initialLogEntry = await createSyncLog(
+      "in-progress", // Initial status
+      [], // Initial empty detailed records
+      sourceEmail,
+      sourceHost,
+      destinationHost
+    );
+
+    // Store the ID of the initial log entry for future updates
+    const syncLogId = initialLogEntry.id;
+
     const detailedSyncRecords = []; // Array to store detailed sync results
-  
+
     const checkedSyncQues = syncStatus.filter((s) => s.checked);
     for (const syncData of checkedSyncQues) {
       let result;
@@ -1220,7 +1291,7 @@ export default function Home() {
           syncData.mapped_ques?.id
         );
       }
-  
+
       // Store the detailed result for each card, including the name
       detailedSyncRecords.push({
         cardId: syncData.question.entity_id ?? syncData.question.id,
@@ -1229,7 +1300,7 @@ export default function Home() {
         error: result.error,
       });
     }
-  
+
     // Determine the overall sync status based on the detailed sync records
     let overallSyncStatus: "complete" | "partial" | "failure";
     if (detailedSyncRecords.every((record) => record.status === "success")) {
@@ -1239,14 +1310,13 @@ export default function Home() {
     } else {
       overallSyncStatus = "failure";
     }
-  
-    // Pass the detailed sync records along with the credentials and host details to the saveSyncRecord function
-    saveSyncRecord(overallSyncStatus, detailedSyncRecords, sourceEmail, sourceHost, destinationHost);
-  
+
+    // Update the sync log entry in the database with the final status and detailed records
+    await updateSyncLog(syncLogId, overallSyncStatus, detailedSyncRecords);
+
     await loadSyncData();
     setSyncLoading(false);
   }
-
 
   return (
     <div className="bg-white py-6">
