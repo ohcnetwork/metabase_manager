@@ -32,26 +32,6 @@ export default function Home() {
     value: 0,
     color: "bg-[#0c80cec5]",
   });
-  // Logic for storing sync history - UPDATE: removed since startSync is now interacting with api calls.
-  // const saveSyncRecord = (
-  //   status: "complete" | "partial" | "failure",
-  //   detailedRecords: any[],
-  //   sourceEmail: string,
-  //   sourceHost: string,
-  //   destinationHost: string
-  // ) => {
-  //   const syncRecords = JSON.parse(localStorage.getItem("syncRecords") || "[]");
-  //   const newRecord = {
-  //     timestamp: new Date().toISOString(),
-  //     status,
-  //     detailedRecords,
-  //     sourceEmail,
-  //     sourceHost,
-  //     destinationHost,
-  //   };
-  //   syncRecords.push(newRecord);
-  //   localStorage.setItem("syncRecords", JSON.stringify(syncRecords));
-  // };
 
   // Logic for card and path & status sort
   const [sortField, setSortField] = useState<"name" | "path" | null>(null);
@@ -232,62 +212,6 @@ export default function Home() {
       color: completedSyncStatus.some((s) => s.status === "error") ? "bg-red-400" : "bg-[#0c80cec5]",
     }));
   }, [syncStatus]);
-
-  // async function syncDashboard(
-  //   sourceServer: Server,
-  //   destinationServer: Server,
-  //   dashboard: Dashboard,
-  //   syncID: string,
-  //   mappedDashID?: number
-  // ) {
-  //   setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s)));
-  //   try {
-  //     const destCollectionID = await toast.promise(
-  //       mirrorCollectionTree(
-  //         sourceServer,
-  //         destinationServer,
-  //         sourceServer.collection,
-  //         destinationServer.collection,
-  //         dashboard.collection_id?.toString()
-  //       ),
-  //       {
-  //         loading: "Syncing collection tree...",
-  //         success: "Collection tree synced!",
-  //         error: (err) => {
-  //           return "Failed to sync collection tree: " + err.message;
-  //         },
-  //       }
-  //     );
-
-  //     const res = await toast.promise(
-  //       createDashboard(
-  //         sourceServer.host,
-  //         destinationServer.host,
-  //         sourceServer.session_token,
-  //         destinationServer.session_token,
-  //         destinationServer.database,
-  //         dashboard,
-  //         destCollectionID.toString(),
-  //         mappedDashID,
-  //         settings.syncMarkdown,
-  //         settings.excludeRegex
-  //       ),
-  //       {
-  //         loading: "Syncing dashboard...",
-  //         success: "Dashboard synced!",
-  //         error: (err) => {
-  //           return "Failed to sync dashboard: " + err.message;
-  //         },
-  //       }
-  //     );
-  //     if (res["error"]) {
-  //       throw new Error(res["error"]);
-  //     }
-  //     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s)));
-  //   } catch (e: any) {
-  //     setSyncStatus((syncStatus) => syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s)));
-  //   }
-  // }
 
   async function syncDashboard(
     sourceServer: Server,
@@ -680,117 +604,6 @@ export default function Home() {
     }
     return lastId;
   }
-
-  // async function syncQuestion(
-  //   sourceServer: Server,
-  //   destinationServer: Server,
-  //   question: Card,
-  //   syncID: string,
-  //   mappedQuesID?: number
-  // ): Promise<"success" | "error"> {
-  //   setSyncStatus((syncStatus) =>
-  //     syncStatus.map((s) => (s.id === syncID ? { ...s, status: "syncing" } : s))
-  //   );
-
-  //   try {
-  //     question.dataset_query.database = destinationServer.database;
-
-  //     const question_query = { ...question.dataset_query };
-  //     if (question_query.type != "native") {
-  //       question_query.query = await transformQuery(
-  //         question_query.query,
-  //         sourceServer,
-  //         destinationServer,
-  //         sourceServer.schema,
-  //         destinationServer.schema,
-  //         undefined,
-  //         question.dataset_query.query
-  //       );
-  //     } else {
-  //       const mappedQuery = { ...question_query.native };
-
-  //       for (const key in question_query.native) {
-  //         if (key == "query") continue;
-  //         mappedQuery[key] = await transformQuery(
-  //           mappedQuery[key],
-  //           sourceServer,
-  //           destinationServer,
-  //           sourceServer.schema,
-  //           destinationServer.schema,
-  //           undefined,
-  //           question.dataset_query.native[key]
-  //         );
-  //       }
-
-  //       for (let key in mappedQuery?.["template-tags"]) {
-  //         if (mappedQuery?.["template-tags"].hasOwnProperty(key)) {
-  //           if (
-  //             mappedQuery["template-tags"][key].hasOwnProperty("name") &&
-  //             key !== mappedQuery["template-tags"][key].name
-  //           ) {
-  //             mappedQuery["template-tags"][mappedQuery["template-tags"][key].name] = mappedQuery["template-tags"][key];
-  //             mappedQuery.query = mappedQuery.query.replace(
-  //               new RegExp(`{{${key}}`, "g"),
-  //               `{{${mappedQuery["template-tags"][mappedQuery["template-tags"][key].name].name}}`
-  //             );
-  //             delete mappedQuery["template-tags"][key];
-  //           }
-  //         }
-  //       }
-
-  //       question_query.native = mappedQuery;
-  //     }
-
-  //     const destCollectionID = await toast.promise(
-  //       mirrorCollectionTree(
-  //         sourceServer,
-  //         destinationServer,
-  //         sourceServer.collection,
-  //         destinationServer.collection,
-  //         question.collection_id?.toString()
-  //       ),
-  //       {
-  //         loading: "Syncing collection tree...",
-  //         success: "Collection tree synced!",
-  //         error: (err) => "Failed to sync collection tree: " + err.message,
-  //       }
-  //     );
-
-  //     const res = await toast.promise(
-  //       createCard(
-  //         sourceServer.host,
-  //         destinationServer.host,
-  //         sourceServer.session_token,
-  //         destinationServer.session_token,
-  //         destinationServer.database,
-  //         { ...question, dataset_query: question_query },
-  //         destCollectionID?.toString(),
-  //         mappedQuesID
-  //       ),
-  //       {
-  //         loading: "Syncing question...",
-  //         success: "Card synced!",
-  //         error: (err) => "Failed to sync question: " + err.message,
-  //       }
-  //     );
-
-  //     if (res["error"]) {
-  //       throw new Error(res["error"]);
-  //     }
-
-  //     setSyncStatus((syncStatus) =>
-  //       syncStatus.map((s) => (s.id === syncID ? { ...s, status: "success" } : s))
-  //     );
-  //     return "success";
-  //   } catch (e: any) {
-  //     toast.error(e.message);
-  //     console.error(e);
-  //     setSyncStatus((syncStatus) =>
-  //       syncStatus.map((s) => (s.id === syncID ? { ...s, status: "error" } : s))
-  //     );
-  //     return "error";
-  //   }
-  // }
 
   async function syncQuestion(
     sourceServer: Server,
@@ -1189,65 +1002,7 @@ export default function Home() {
     setSyncLoading(false);
   }
 
-  // async function startSync() {
-  //   setSyncLoading(true);
-  //   setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
-
-  //   // Extract the email and host from the first source and destination servers
-  //   // You might want to adjust this if you have multiple servers or other requirements
-  //   const sourceEmail = sourceServers.length > 0 ? sourceServers[0].email : "";
-  //   const sourceHost = sourceServers.length > 0 ? sourceServers[0].host : "";
-  //   const destinationHost = destinationServers.length > 0 ? destinationServers[0].host : "";
-
-  //   const detailedSyncRecords = []; // Array to store detailed sync results
-
-  //   const checkedSyncQues = syncStatus.filter((s) => s.checked);
-  //   for (const syncData of checkedSyncQues) {
-  //     let result;
-  //     if (syncData.entity_type === "dashboard") {
-  //       result = await syncDashboard(
-  //         syncData.source_server,
-  //         syncData.destination_server,
-  //         syncData.question as Dashboard,
-  //         syncData.id,
-  //         syncData.mapped_ques?.id
-  //       );
-  //     } else {
-  //       result = await syncQuestion(
-  //         syncData.source_server,
-  //         syncData.destination_server,
-  //         syncData.question as Card,
-  //         syncData.id,
-  //         syncData.mapped_ques?.id
-  //       );
-  //     }
-
-  //     // Store the detailed result for each card, including the name
-  //     detailedSyncRecords.push({
-  //       cardId: syncData.question.entity_id ?? syncData.question.id,
-  //       cardName: syncData.question.name,
-  //       status: result.status,
-  //       error: result.error,
-  //     });
-  //   }
-
-  //   // Determine the overall sync status based on the detailed sync records
-  //   let overallSyncStatus: "complete" | "partial" | "failure";
-  //   if (detailedSyncRecords.every((record) => record.status === "success")) {
-  //     overallSyncStatus = "complete";
-  //   } else if (detailedSyncRecords.some((record) => record.status === "error")) {
-  //     overallSyncStatus = "partial";
-  //   } else {
-  //     overallSyncStatus = "failure";
-  //   }
-
-  //   // Pass the detailed sync records along with the credentials and host details to the saveSyncRecord function
-  //   saveSyncRecord(overallSyncStatus, detailedSyncRecords, sourceEmail, sourceHost, destinationHost);
-
-  //   await loadSyncData();
-  //   setSyncLoading(false);
-  // }
-
+  
   async function startSync() {
     setSyncLoading(true);
     setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
