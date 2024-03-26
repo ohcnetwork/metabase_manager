@@ -1002,7 +1002,6 @@ export default function Home() {
     setSyncLoading(false);
   }
 
-  
   async function startSync() {
     setSyncLoading(true);
     setProgressBar({ value: 0, color: "bg-[#0c80cec5]" });
@@ -1298,13 +1297,30 @@ export default function Home() {
               <tbody>
                 {Object.entries(syncStatusGroups).map(([destinationString, pathGroups], destinationIndex) => (
                   <Fragment key={destinationString}>
-                    <tr className="bg-gray-200 cursor-pointer" onClick={() => toggleDestination(destinationString)}>
-                      <td colSpan={6} className="py-2 px-4 font-medium">
-                        {destinationString}{" "}
+                    <tr className="cursor-pointer" onClick={() => toggleDestination(destinationString)}>
+                      <td
+                        colSpan={6}
+                        className="bg-gray-200 border-b border-gray-300"
+                      >
+                        <div className="flex justify-between items-center py-2 px-4 font-medium">
+                        {destinationString}
                         {expandedDestinations[destinationString] ||
-                        (expandAll && expandedDestinations[destinationString] === undefined)
-                          ? "🔼"
-                          : "🔽"}
+                        (expandAll && expandedDestinations[destinationString] === undefined) ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6 text-gray-700">
+                            <path
+                              fill="#000000"
+                              d="M17,13.41,12.71,9.17a1,1,0,0,0-1.42,0L7.05,13.41a1,1,0,0,0,0,1.42,1,1,0,0,0,1.41,0L12,11.29l3.54,3.54a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29A1,1,0,0,0,17,13.41Z"
+                            ></path>
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6 text-gray-700">
+                            <path
+                              fill="#000000"
+                              d="M17,9.17a1,1,0,0,0-1.41,0L12,12.71,8.46,9.17a1,1,0,0,0-1.41,0,1,1,0,0,0,0,1.42l4.24,4.24a1,1,0,0,0,1.42,0L17,10.59A1,1,0,0,0,17,9.17Z"
+                            ></path>
+                          </svg>
+                        )}
+                        </div>
                       </td>
                     </tr>
                     {(expandedDestinations[destinationString] ||
@@ -1312,10 +1328,11 @@ export default function Home() {
                       Object.entries(pathGroups).map(([pathString, group], pathIndex) => (
                         <Fragment key={pathString}>
                           <tr
-                            className="bg-gray-100 cursor-pointer"
+                            className="cursor-pointer"
                             onClick={() => togglePath(destinationString, pathString)}
                           >
-                            <td className="pl-4 py-2">
+                            <td className="bg-gray-100 border-b border-gray-300 py-2">
+                            <div className="flex items-center pl-5">
                               <input
                                 type="checkbox"
                                 checked={group.every((status) => status.checked)}
@@ -1329,13 +1346,43 @@ export default function Home() {
                                   );
                                 }}
                                 onClick={(e) => e.stopPropagation()}
+                                className="form-checkbox h-4 w-4 text-blue-600"
                               />
+                              </div>
                             </td>
-                            <td colSpan={5} className="py-2 font-medium">
-                              <span onClick={(e) => e.stopPropagation()}>
+                            <td
+                              colSpan={5}
+                              className="bg-gray-100 border-b border-gray-300"
+                            >
+                              <div className="flex justify-between items-center py-2 px-4 font-medium">
+                              <span>
                                 {pathString} ({group.length})
-                                {expandedPaths[destinationString]?.[pathString] || expandAll ? "🔼" : "🔽"}
                               </span>
+                              {expandedPaths[destinationString]?.[pathString] ||
+                              (expandAll && expandedPaths[destinationString]?.[pathString] === undefined) ? (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  className="h-6 w-6 text-gray-700"
+                                >
+                                  <path
+                                    fill="#000000"
+                                    d="M17,13.41,12.71,9.17a1,1,0,0,0-1.42,0L7.05,13.41a1,1,0,0,0,0,1.42,1,1,0,0,0,1.41,0L12,11.29l3.54,3.54a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29A1,1,0,0,0,17,13.41Z"
+                                  ></path>
+                                </svg>
+                              ) : (
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  className="h-6 w-6 text-gray-700"
+                                >
+                                  <path
+                                    fill="#000000"
+                                    d="M17,9.17a1,1,0,0,0-1.41,0L12,12.71,8.46,9.17a1,1,0,0,0-1.41,0,1,1,0,0,0,0,1.42l4.24,4.24a1,1,0,0,0,1.42,0L17,10.59A1,1,0,0,0,17,9.17Z"
+                                  ></path>
+                                </svg>
+                              )}
+                              </div>
                             </td>
                           </tr>
                           {(expandedPaths[destinationString]?.[pathString] ||
