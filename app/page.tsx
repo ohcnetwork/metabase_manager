@@ -34,7 +34,7 @@ export default function Home() {
   });
 
   // Logic for card and path & status sort
-  const [sortField, setSortField] = useState<"name" | "path" | null>(null);
+  const [sortField, setSortField] = useState<"name" | "path" | "status" | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const statusOrder = ["ready", "outdated", "in-sync", "excluded", "syncing", "success", "error"];
@@ -71,8 +71,8 @@ export default function Home() {
 
     if (newExpandAll) {
       // If expanding all, set every destination and path to true.
-      const newExpandedDestinations = {};
-      const newExpandedPaths = {};
+      const newExpandedDestinations: Record<string, boolean> = {};
+      const newExpandedPaths: Record<string, Record<string, boolean>> = {};
       syncStatus.forEach((status) => {
         const destinationString = formatHostUrl(status.destination_server.host);
         newExpandedDestinations[destinationString] = true;
@@ -105,8 +105,8 @@ export default function Home() {
       // Existing sorting logic for name and path
       if (sortField === "name") {
         return sortDirection === "asc"
-          ? a.question.name.localeCompare(b.question.name)
-          : b.question.name.localeCompare(a.question.name);
+          ? (a?.question?.name ?? "").localeCompare(b?.question?.name ?? "-")
+          : (b?.question?.name ?? "").localeCompare(a?.question?.name ?? "-");
       } else if (sortField === "path") {
         const pathA = a.collection_path?.join("/") || "";
         const pathB = b.collection_path?.join("/") || "";
@@ -119,8 +119,8 @@ export default function Home() {
 
   // UPDATED LOGIC FOR COLLAPSIBLE DESTINATION AND PATH SECTIONS
   // Update groupByPath to include destination grouping
-  const groupByDestinationAndPath = (syncStatus) => {
-    const grouped = {};
+  const groupByDestinationAndPath = (syncStatus: SyncStatus[]) => {
+    const grouped: Record<string, Record<string, SyncStatus[]>> = {};
     syncStatus.forEach((status) => {
       const destinationString = formatHostUrl(status.destination_server.host);
       const pathString = status.collection_path?.join("/") || "Uncategorized";
@@ -136,12 +136,12 @@ export default function Home() {
   };
 
   // Update the state to track expanded destinations and paths
-  const [expandedDestinations, setExpandedDestinations] = useState({});
-  const [expandedPaths, setExpandedPaths] = useState({});
+  const [expandedDestinations, setExpandedDestinations] = useState<Record<string, boolean>>({});
+  const [expandedPaths, setExpandedPaths] = useState<Record<string, Record<string, boolean>>>({});
 
   // Add toggle functions for destinations and paths
   // This function toggles the expand/collapse state of a specific destination.
-  const toggleDestination = (destinationString) => {
+  const toggleDestination = (destinationString: string) => {
     setExpandedDestinations((prev) => {
       const isCurrentlyExpanded = !!prev[destinationString];
       // Toggle the destination's state.
@@ -164,7 +164,7 @@ export default function Home() {
     });
   };
 
-  const togglePath = (destinationString, pathString) => {
+  const togglePath = (destinationString: string, pathString: string) => {
     setExpandedPaths((prev) => {
       // If the destination entry doesn't exist, create it.
       if (!prev[destinationString]) {
@@ -313,6 +313,46 @@ export default function Home() {
       }
       return destinationField?.id;
     }
+  }
+
+  function getSortingIcon(isSorted: boolean, sortDirection: string) {
+    if (isSorted) {
+      return sortDirection === "asc" ? (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          data-name="Layer 1"
+          viewBox="0 0 24 24"
+          id="sort-amount-down"
+          className="h-5 ml-2"
+        >
+          <path
+            fill="#000000"
+            d="M6.29,14.29l-.29.3V7A1,1,0,0,0,4,7v7.59l-.29-.3a1,1,0,0,0-1.42,1.42l2,2a1,1,0,0,0,.33.21.94.94,0,0,0,.76,0,1,1,0,0,0,.33-.21l2-2a1,1,0,0,0-1.42-1.42ZM11,8H21a1,1,0,0,0,0-2H11a1,1,0,0,0,0,2Zm10,3H11a1,1,0,0,0,0,2H21a1,1,0,0,0,0-2Zm0,5H11a1,1,0,0,0,0,2H21a1,1,0,0,0,0-2Z"
+          ></path>
+        </svg>
+      ) : (
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          data-name="Layer 1"
+          viewBox="0 0 24 24"
+          id="sort-amount-up"
+          className="h-5 ml-2"
+        >
+          <path
+            fill="#000000"
+            d="M5.71,6.29a1,1,0,0,0-.33-.21,1,1,0,0,0-.76,0,1,1,0,0,0-.33.21l-2,2A1,1,0,0,0,3.71,9.71L4,9.41V17a1,1,0,0,0,2,0V9.41l.29.3a1,1,0,0,0,1.42,0,1,1,0,0,0,0-1.42ZM11,8H21a1,1,0,0,0,0-2H11a1,1,0,0,0,0,2Zm10,8H11a1,1,0,0,0,0,2H21a1,1,0,0,0,0-2Zm0-5H11a1,1,0,0,0,0,2H21a1,1,0,0,0,0-2Z"
+          ></path>
+        </svg>
+      );
+    }
+    return (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" id="sorting" className="ml-2 h-5">
+        <path
+          fill="#000000"
+          d="M11.29,10.21a1,1,0,0,0,1.42,0l3-3a1,1,0,1,0-1.42-1.42L12,8.09,9.71,5.79A1,1,0,0,0,8.29,7.21Zm1.42,4.58a1,1,0,0,0-1.42,0l-3,3a1,1,0,0,0,1.42,1.42L12,16.91l2.29,2.3a1,1,0,0,0,1.42,0,1,1,0,0,0,0-1.42Z"
+        ></path>
+      </svg>
+    );
   }
 
   async function mapJoins(
@@ -1015,7 +1055,7 @@ export default function Home() {
     const initialLogEntry = await createSyncLog(
       "in-progress", // Initial status
       [], // Initial empty detailed records
-      sourceEmail,
+      sourceEmail ?? "-",
       sourceHost,
       destinationHost
     );
@@ -1224,19 +1264,15 @@ export default function Home() {
               style={{ width: `${progressBar.value}%` }}
             ></div>
           </div>
+          <button
+            onClick={toggleExpandAll}
+            className=" mb-2 rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white min-w-[120px] justify-end mr-0 ml-auto"
+          >
+            {expandAll ? "Collapse All" : "Expand All"}
+          </button>
           <div className="relative overflow-x-auto border border-gray-300 rounded-md mb-4">
             <table className="w-full text-sm text-left text-gray-500">
               <thead className="text-xs text-gray-700 uppercase bg-gray-50">
-                <tr>
-                  <th>
-                    <button
-                      onClick={toggleExpandAll}
-                      className="rounded-md bg-[#1e6091] px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[#168aad] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:bg-gray-700 disabled:text-white"
-                    >
-                      {expandAll ? "Collapse All" : "Expand All"}
-                    </button>
-                  </th>
-                </tr>
                 <tr>
                   <th scope="col" className="p-4 ">
                     <div className="flex items-center">
@@ -1267,29 +1303,25 @@ export default function Home() {
                     Destination
                   </th>
                   <th scope="col" className="py-3 px-2">
-                    Card
-                    <button onClick={() => toggleSort("name")}>
-                      {sortField === "name" ? (sortDirection === "asc" ? "🔽" : "🔼") : "⇅"}
-                    </button>
+                    <span className="flex items-center">
+                      Card
+                      <button onClick={() => toggleSort("name")}>
+                        {getSortingIcon(sortField === "name", sortDirection)}
+                      </button>
+                    </span>
                   </th>
                   <th scope="col" className="py-3 px-2">
-                    Path
-                    <button onClick={() => toggleSort("path")}>
-                      {sortField === "path" ? (sortDirection === "asc" ? "🔽" : "🔼") : "⇅"}
-                    </button>
+                    <span className="flex items-center">
+                      Path
+                      <button onClick={() => toggleSort("path")}>
+                        {getSortingIcon(sortField === "path", sortDirection)}
+                      </button>
+                    </span>
                   </th>
-                  <th scope="col" className="py-3 px-2 flex justify-between items-center">
+                  <th scope="col" className="py-3 px-2 flex items-center">
                     <span>Status</span>
                     <button onClick={() => toggleSort("status")} className="flex items-center">
-                      {isSortedByStatus ? (
-                        sortDirection === "asc" ? (
-                          <span>🔽</span> // Icon for ascending sort
-                        ) : (
-                          <span>🔼</span> // Icon for descending sort
-                        )
-                      ) : (
-                        <span>⇅</span> // Icon indicating sorting is available but not active
-                      )}
+                      {getSortingIcon(isSortedByStatus, sortDirection)}
                     </button>
                   </th>
                 </tr>
@@ -1298,28 +1330,59 @@ export default function Home() {
                 {Object.entries(syncStatusGroups).map(([destinationString, pathGroups], destinationIndex) => (
                   <Fragment key={destinationString}>
                     <tr className="cursor-pointer" onClick={() => toggleDestination(destinationString)}>
-                      <td
-                        colSpan={6}
-                        className="bg-gray-200 border-b border-gray-300"
-                      >
+                      <td colSpan={6} className="rounded-lg border border-gray-200">
                         <div className="flex justify-between items-center py-2 px-4 font-medium">
-                        {destinationString}
-                        {expandedDestinations[destinationString] ||
-                        (expandAll && expandedDestinations[destinationString] === undefined) ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6 text-gray-700">
-                            <path
-                              fill="#000000"
-                              d="M17,13.41,12.71,9.17a1,1,0,0,0-1.42,0L7.05,13.41a1,1,0,0,0,0,1.42,1,1,0,0,0,1.41,0L12,11.29l3.54,3.54a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29A1,1,0,0,0,17,13.41Z"
-                            ></path>
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-6 w-6 text-gray-700">
-                            <path
-                              fill="#000000"
-                              d="M17,9.17a1,1,0,0,0-1.41,0L12,12.71,8.46,9.17a1,1,0,0,0-1.41,0,1,1,0,0,0,0,1.42l4.24,4.24a1,1,0,0,0,1.42,0L17,10.59A1,1,0,0,0,17,9.17Z"
-                            ></path>
-                          </svg>
-                        )}
+                          <div className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={Object.keys(pathGroups).every((path) =>
+                                pathGroups[path].every((status) => status.checked)
+                              )}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => {
+                                e.stopPropagation(); // Prevent the destination toggle when clicking the checkbox
+                                const checked = e.target.checked;
+                                setSyncStatus((currentSyncStatus) =>
+                                  currentSyncStatus.map((status) => {
+                                    const allIDs = Object.values(pathGroups)
+                                      .flat(10)
+                                      .map((status) => status.id);
+                                    if (allIDs.includes(status.id)) {
+                                      return { ...status, checked };
+                                    } else {
+                                      return status;
+                                    }
+                                  })
+                                );
+                              }}
+                              className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <p className="text-black text-[17px] font-medium ml-4">{destinationString}</p>
+                          </div>
+                          {expandedDestinations[destinationString] ||
+                          (expandAll && expandedDestinations[destinationString] === undefined) ? (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              className="h-6 w-6 text-gray-700"
+                            >
+                              <path
+                                fill="#000000"
+                                d="M17,13.41,12.71,9.17a1,1,0,0,0-1.42,0L7.05,13.41a1,1,0,0,0,0,1.42,1,1,0,0,0,1.41,0L12,11.29l3.54,3.54a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29A1,1,0,0,0,17,13.41Z"
+                              ></path>
+                            </svg>
+                          ) : (
+                            <svg
+                              xmlns="http://www.w3.org/2000/svg"
+                              viewBox="0 0 24 24"
+                              className="h-6 w-6 text-gray-700"
+                            >
+                              <path
+                                fill="#000000"
+                                d="M17,9.17a1,1,0,0,0-1.41,0L12,12.71,8.46,9.17a1,1,0,0,0-1.41,0,1,1,0,0,0,0,1.42l4.24,4.24a1,1,0,0,0,1.42,0L17,10.59A1,1,0,0,0,17,9.17Z"
+                              ></path>
+                            </svg>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -1327,61 +1390,55 @@ export default function Home() {
                       (expandAll && expandedDestinations[destinationString] === undefined)) &&
                       Object.entries(pathGroups).map(([pathString, group], pathIndex) => (
                         <Fragment key={pathString}>
-                          <tr
-                            className="cursor-pointer"
-                            onClick={() => togglePath(destinationString, pathString)}
-                          >
-                            <td className="bg-gray-100 border-b border-gray-300 py-2">
-                            <div className="flex items-center pl-5">
-                              <input
-                                type="checkbox"
-                                checked={group.every((status) => status.checked)}
-                                onChange={(e) => {
-                                  e.stopPropagation(); // Prevent the path toggle when clicking the checkbox
-                                  const checked = e.target.checked;
-                                  setSyncStatus((currentSyncStatus) =>
-                                    currentSyncStatus.map((status) =>
-                                      group.includes(status) ? { ...status, checked } : status
-                                    )
-                                  );
-                                }}
-                                onClick={(e) => e.stopPropagation()}
-                                className="form-checkbox h-4 w-4 text-blue-600"
-                              />
+                          <tr className="cursor-pointer" onClick={() => togglePath(destinationString, pathString)}>
+                            <td className="bg-zinc-50 border-b py-2 text-gray-600">
+                              <div className="flex items-center ml-4">
+                                <input
+                                  type="checkbox"
+                                  checked={group.every((status) => status.checked)}
+                                  onChange={(e) => {
+                                    e.stopPropagation(); // Prevent the path toggle when clicking the checkbox
+                                    const checked = e.target.checked;
+                                    setSyncStatus((currentSyncStatus) =>
+                                      currentSyncStatus.map((status) =>
+                                        group.includes(status) ? { ...status, checked } : status
+                                      )
+                                    );
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="form-checkbox h-4 w-4 text-blue-600"
+                                />
                               </div>
                             </td>
-                            <td
-                              colSpan={5}
-                              className="bg-gray-100 border-b border-gray-300"
-                            >
+                            <td colSpan={5} className="bg-zinc-50 border-b text-gray-600">
                               <div className="flex justify-between items-center py-2 px-4 font-medium">
-                              <span>
-                                {pathString} ({group.length})
-                              </span>
-                              {expandedPaths[destinationString]?.[pathString] ||
-                              (expandAll && expandedPaths[destinationString]?.[pathString] === undefined) ? (
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  className="h-6 w-6 text-gray-700"
-                                >
-                                  <path
-                                    fill="#000000"
-                                    d="M17,13.41,12.71,9.17a1,1,0,0,0-1.42,0L7.05,13.41a1,1,0,0,0,0,1.42,1,1,0,0,0,1.41,0L12,11.29l3.54,3.54a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29A1,1,0,0,0,17,13.41Z"
-                                  ></path>
-                                </svg>
-                              ) : (
-                                <svg
-                                  xmlns="http://www.w3.org/2000/svg"
-                                  viewBox="0 0 24 24"
-                                  className="h-6 w-6 text-gray-700"
-                                >
-                                  <path
-                                    fill="#000000"
-                                    d="M17,9.17a1,1,0,0,0-1.41,0L12,12.71,8.46,9.17a1,1,0,0,0-1.41,0,1,1,0,0,0,0,1.42l4.24,4.24a1,1,0,0,0,1.42,0L17,10.59A1,1,0,0,0,17,9.17Z"
-                                  ></path>
-                                </svg>
-                              )}
+                                <span>
+                                  {pathString} ({group.length})
+                                </span>
+                                {expandedPaths[destinationString]?.[pathString] ||
+                                (expandAll && expandedPaths[destinationString]?.[pathString] === undefined) ? (
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    className="h-6 w-6 text-gray-700"
+                                  >
+                                    <path
+                                      fill="#000000"
+                                      d="M17,13.41,12.71,9.17a1,1,0,0,0-1.42,0L7.05,13.41a1,1,0,0,0,0,1.42,1,1,0,0,0,1.41,0L12,11.29l3.54,3.54a1,1,0,0,0,.7.29,1,1,0,0,0,.71-.29A1,1,0,0,0,17,13.41Z"
+                                    ></path>
+                                  </svg>
+                                ) : (
+                                  <svg
+                                    xmlns="http://www.w3.org/2000/svg"
+                                    viewBox="0 0 24 24"
+                                    className="h-6 w-6 text-gray-700"
+                                  >
+                                    <path
+                                      fill="#000000"
+                                      d="M17,9.17a1,1,0,0,0-1.41,0L12,12.71,8.46,9.17a1,1,0,0,0-1.41,0,1,1,0,0,0,0,1.42l4.24,4.24a1,1,0,0,0,1.42,0L17,10.59A1,1,0,0,0,17,9.17Z"
+                                    ></path>
+                                  </svg>
+                                )}
                               </div>
                             </td>
                           </tr>
