@@ -7,7 +7,7 @@ export async function createSyncLog(
   sourceHost: string,
   destinationHost: string
 ) {
-  return await prisma.SyncLog.create({
+  return await prisma.syncLog.create({
     data: {
       status,
       detailedRecords,
@@ -21,9 +21,9 @@ export async function createSyncLog(
 export async function updateSyncLog(
   id: number,
   status: string,
-  detailedRecords: any, // This should match the type of the detailedRecords field in your Prisma schema
+  detailedRecords: any // This should match the type of the detailedRecords field in your Prisma schema
 ) {
-  return await prisma.SyncLog.update({
+  return await prisma.syncLog.update({
     where: {
       id,
     },
@@ -35,11 +35,11 @@ export async function updateSyncLog(
 }
 
 export async function getAllSyncLogs() {
-  return await prisma.SyncLog.findMany();
+  return await prisma.syncLog.findMany();
 }
 
 export async function getSyncLogById(id: number) {
-  return await prisma.SyncLog.findUnique({
+  return await prisma.syncLog.findUnique({
     where: {
       id,
     },
