@@ -20,6 +20,9 @@ import {
   updateSyncLog,
 } from "./api";
 
+import { useSession, signIn } from "next-auth/react";
+
+
 import React, { Fragment } from "react"; // needed for collapsible
 
 export default function Home() {
@@ -1112,6 +1115,29 @@ export default function Home() {
     setSyncLoading(false);
   }
 
+  const { data: session, status } = useSession();
+
+  if (status === "loading") {
+    return <div>Loading...</div>;
+  }
+
+  if (status === "unauthenticated") {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold">Welcome to Metabase Manager</h1>
+          <p className="mt-4">Please sign in to access the application.</p>
+          <button
+            onClick={() => signIn()}
+            className="mt-6 px-4 py-2 bg-blue-600 text-white rounded-md"
+          >
+            Sign In
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
   return (
     <div className="bg-white py-6">
       <Toaster position="top-right" />
