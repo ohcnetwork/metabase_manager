@@ -21,8 +21,24 @@ import {
 } from "./api";
 
 import React, { Fragment } from "react"; // needed for collapsible
+import { useAuth } from '@/app/context/AuthContext'; // Update this line
+import { useRouter } from 'next/router';
 
 export default function Home() {
+  //AUTH LOGIN ROUTING 
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login'); // Redirect to login page if not authenticated
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return <p>Loading...</p>;
+  }
+
   const [sourceServers, setSourceServers] = useState<Server[]>([]);
   const [proceedLoading, setProceedLoading] = useState(false);
   const [destinationServers, setDestinationServers] = useState<Server[]>([]);

@@ -1,15 +1,16 @@
-import "./globals.css";
-import type { Metadata } from "next";
+"use client";
 
-export const metadata: Metadata = {
-  title: "Metabase Manager",
-  description: "Manage your Metabase instance",
-};
+import "./globals.css";
+import { AuthProvider } from '@/app/context/AuthContext'; // Import AuthProvider
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <AuthProvider>
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   );
 }

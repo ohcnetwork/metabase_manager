@@ -31,3 +31,11 @@ model SyncLog {
   @@unique([timestamp, sourceHost, destinationHost])
 }
 
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  role      String   // "admin" or "user"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
